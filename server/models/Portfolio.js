@@ -18,6 +18,7 @@ const portfolioSchema = new mongoose.Schema({
     uploadedAt: { type: Date, default: Date.now }
   }],
   resumeUrl: { type: String, default: '' },
+  industry: { type: String, default: '' },
   companyName: { type: String, default: '' },
   projectsPosted: { type: Number, default: 0 },
   projectsCompleted: { type: Number, default: 0 },
@@ -28,3 +29,4 @@ const portfolioSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 module.exports = mongoose.model('Portfolio', portfolioSchema);
+
