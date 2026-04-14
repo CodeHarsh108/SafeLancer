@@ -255,6 +255,7 @@ function ProfileEditForm({ portfolio, user, onSave, onCancel }) {
       const payload = { ...form, skills: form.skills }
       const { data } = await api.post('/api/portfolio/update', payload)
       localStorage.setItem('profileCompletion', String(data.completionPercent || 20))
+      window.dispatchEvent(new Event('profileUpdated'))
       onSave(data)
       toast.success('Profile saved!')
     } catch {
@@ -275,6 +276,7 @@ function ProfileEditForm({ portfolio, user, onSave, onCancel }) {
       const { data } = await api.post('/api/portfolio/upload-sample', fd)
       setLocalPortfolio(prev => ({ ...prev, projectSamples: [...(prev?.projectSamples || []), data.sample] }))
       localStorage.setItem('profileCompletion', String(data.completionPercent || 20))
+      window.dispatchEvent(new Event('profileUpdated'))
       setSampleTitle('')
       toast.success('Portfolio sample uploaded!')
     } catch {
@@ -294,6 +296,7 @@ function ProfileEditForm({ portfolio, user, onSave, onCancel }) {
       const { data } = await api.post('/api/portfolio/upload-resume', fd)
       setLocalPortfolio(prev => ({ ...prev, resumeUrl: data.resumeUrl }))
       localStorage.setItem('profileCompletion', String(data.completionPercent || 20))
+      window.dispatchEvent(new Event('profileUpdated'))
       toast.success('Resume uploaded!')
     } catch {
       toast.error('Upload failed')

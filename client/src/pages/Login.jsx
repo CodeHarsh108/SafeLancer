@@ -27,6 +27,7 @@ export default function Login() {
       } catch {
         localStorage.setItem('profileCompletion', '20')
       }
+      window.dispatchEvent(new Event('profileUpdated'))
 
       toast.success(`Welcome back, ${data.user.name}!`)
       setTimeout(() => {

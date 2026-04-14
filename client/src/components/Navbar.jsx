@@ -1,10 +1,22 @@
+import { useState, useEffect } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 
 export default function Navbar() {
   const navigate = useNavigate()
   const user = JSON.parse(localStorage.getItem('user') || 'null')
-  const profileCompletion = parseInt(localStorage.getItem('profileCompletion') || '0', 10)
+  const [profileCompletion, setProfileCompletion] = useState(
+    parseInt(localStorage.getItem('profileCompletion') || '0', 10)
+  )
   const showBanner = user && profileCompletion < 100
+
+  // Re-sync whenever ProfileSetup or Login writes a new value
+  useEffect(() => {
+    const sync = () => setProfileCompletion(
+      parseInt(localStorage.getItem('profileCompletion') || '0', 10)
+    )
+    window.addEventListener('profileUpdated', sync)
+    return () => window.removeEventListener('profileUpdated', sync)
+  }, [])
 
   const logout = () => {
     localStorage.clear()
