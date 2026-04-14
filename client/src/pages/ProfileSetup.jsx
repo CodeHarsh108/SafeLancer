@@ -32,10 +32,9 @@ function calcCompletion(role, p) {
   } else {
     let pct = 20
     if (p.bio) pct += 20
-    if (p.companyName) pct += 15
-    if (p.industry) pct += 15
-    if (p.linkedinUrl) pct += 15
-    if (p.paymentVerified) pct += 15
+    if (p.companyName) pct += 20
+    if (p.industry) pct += 20
+    if (p.linkedinUrl) pct += 20
     return Math.min(100, pct)
   }
 }
@@ -367,7 +366,7 @@ function ProfileEditForm({ portfolio, user, onSave, onCancel }) {
         {/* Client-only */}
         {!isFreelancer && (
           <>
-            <Field label="Company Name" bonus={15} error={errors.companyName}>
+            <Field label="Company Name" bonus={20} error={errors.companyName}>
               <input
                 value={form.companyName}
                 onChange={e => setForm({ ...form, companyName: e.target.value })}
@@ -375,7 +374,7 @@ function ProfileEditForm({ portfolio, user, onSave, onCancel }) {
                 placeholder="e.g. TechStart Ltd"
               />
             </Field>
-            <Field label="Industry" required bonus={15} error={errors.industry}>
+            <Field label="Industry" required bonus={20} error={errors.industry}>
               <select
                 value={form.industry}
                 onChange={e => { setForm({ ...form, industry: e.target.value }); setErrors({ ...errors, industry: '' }) }}
@@ -458,7 +457,7 @@ function ProfileEditForm({ portfolio, user, onSave, onCancel }) {
         )}
 
         {/* LinkedIn — both roles */}
-        <Field label="LinkedIn URL" bonus={isFreelancer ? 5 : 15} error={errors.linkedinUrl}
+        <Field label="LinkedIn URL" bonus={isFreelancer ? 5 : 20} error={errors.linkedinUrl}
           hint="Must start with https://">
           <input
             value={form.linkedinUrl}

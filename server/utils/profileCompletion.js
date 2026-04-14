@@ -15,12 +15,13 @@ function calcCompletion(role, data) {
     if (data.resumeUrl) pct += 10
     return Math.min(100, pct)
   } else {
+    // Client: 4 user-fillable fields × 20% each + 20% base = 100%
+    // paymentVerified is system-set so excluded from completion
     let pct = 20
     if (data.bio) pct += 20
-    if (data.companyName) pct += 15
-    if (data.industry) pct += 15
-    if (data.linkedinUrl) pct += 15
-    if (data.paymentVerified) pct += 15
+    if (data.companyName) pct += 20
+    if (data.industry) pct += 20
+    if (data.linkedinUrl) pct += 20
     return Math.min(100, pct)
   }
 }
