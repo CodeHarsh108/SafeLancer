@@ -15,6 +15,30 @@ function isValidUrl(url) {
   try { new URL(url); return true } catch { return false }
 }
 
+// Defined at module level so React never unmounts/remounts inputs on re-render
+function Field({ label, hint, required, bonus, error, children }) {
+  return (
+    <div>
+      <div className="flex items-baseline justify-between mb-1">
+        <label className="text-sm font-medium text-slate-700">
+          {label}
+          {required && <span className="text-red-500 ml-0.5">*</span>}
+          {bonus && <span className="ml-1.5 text-xs text-indigo-500 font-normal">+{bonus}%</span>}
+        </label>
+        {hint && <span className="text-xs text-slate-400">{hint}</span>}
+      </div>
+      {children}
+      {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
+    </div>
+  )
+}
+
+function inputClass(hasErr) {
+  return `w-full border rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors ${
+    hasErr ? 'border-red-400 bg-red-50' : 'border-slate-300'
+  }`
+}
+
 // ─────────────────────────────────────────────
 // Profile Card — read-only view
 // ─────────────────────────────────────────────
@@ -304,26 +328,6 @@ function ProfileEditForm({ portfolio, user, onSave, onCancel }) {
       setResumeUploading(false)
     }
   }
-
-  const Field = ({ label, hint, required, bonus, error, children }) => (
-    <div>
-      <div className="flex items-baseline justify-between mb-1">
-        <label className="text-sm font-medium text-slate-700">
-          {label}
-          {required && <span className="text-red-500 ml-0.5">*</span>}
-          {bonus && <span className="ml-1.5 text-xs text-indigo-500 font-normal">+{bonus}%</span>}
-        </label>
-        {hint && <span className="text-xs text-slate-400">{hint}</span>}
-      </div>
-      {children}
-      {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
-    </div>
-  )
-
-  const inputClass = (hasErr) =>
-    `w-full border rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors ${
-      hasErr ? 'border-red-400 bg-red-50' : 'border-slate-300'
-    }`
 
   return (
     <div className="space-y-5">
