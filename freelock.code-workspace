@@ -1,0 +1,208 @@
+{
+  "folders": [
+    {
+      "name": "FreeLock",
+      "path": "."
+    }
+  ],
+  "settings": {
+    "editor.formatOnSave": true,
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "editor.tabSize": 2,
+    "editor.insertSpaces": true,
+    "editor.bracketPairColorization.enabled": true,
+    "editor.guides.bracketPairs": "active",
+    "editor.codeActionsOnSave": {
+      "source.fixAll.eslint": "explicit"
+    },
+    "editor.quickSuggestions": {
+      "strings": true
+    },
+    "files.associations": {
+      "*.jsx": "javascriptreact",
+      "*.js": "javascript"
+    },
+    "emmet.includeLanguages": {
+      "javascript": "javascriptreact"
+    },
+    "javascript.preferences.importModuleSpecifier": "relative",
+    "javascript.updateImportsOnFileMove.enabled": "always",
+    "tailwindCSS.includeLanguages": {
+      "javascript": "javascript",
+      "javascriptreact": "javascriptreact"
+    },
+    "tailwindCSS.experimental.classRegex": [
+      ["className=\"([^\"]*)", "([^\"']*)"]
+    ],
+    "editor.wordWrap": "on",
+    "terminal.integrated.env.osx": {
+      "NODE_ENV": "development"
+    },
+    "files.exclude": {
+      "**/node_modules": true,
+      "**/dist": true,
+      "**/.DS_Store": true,
+      "**/uploads/*": false
+    },
+    "search.exclude": {
+      "**/node_modules": true,
+      "**/dist": true,
+      "**/package-lock.json": true
+    },
+    "explorer.fileNesting.enabled": true,
+    "explorer.fileNesting.patterns": {
+      "*.jsx": "${capture}.test.jsx, ${capture}.css",
+      "package.json": "package-lock.json, .env, .env.example, .gitignore",
+      "vite.config.js": "tailwind.config.js, postcss.config.js",
+      "index.js": "seed.js"
+    },
+    "workbench.colorCustomizations": {
+      "titleBar.activeBackground": "#1e293b",
+      "titleBar.activeForeground": "#e2e8f0",
+      "activityBar.background": "#0f172a"
+    }
+  },
+  "extensions": {
+    "recommendations": [
+      "esbenp.prettier-vscode",
+      "dbaeumer.vscode-eslint",
+      "bradlc.vscode-tailwindcss",
+      "mongodb.mongodb-vscode",
+      "ms-vscode.vscode-js-debug",
+      "formulahendry.auto-rename-tag",
+      "dsznajder.es7-react-js-snippets",
+      "christian-kohler.path-intellisense",
+      "mikestead.dotenv",
+      "usernamehw.errorlens",
+      "eamodio.gitlens",
+      "PKief.material-icon-theme",
+      "GitHub.copilot"
+    ]
+  },
+  "launch": {
+    "version": "0.2.0",
+    "configurations": [
+      {
+        "name": "Start Server (nodemon)",
+        "type": "node",
+        "request": "launch",
+        "runtimeExecutable": "nodemon",
+        "program": "${workspaceFolder}/server/index.js",
+        "cwd": "${workspaceFolder}/server",
+        "envFile": "${workspaceFolder}/server/.env",
+        "restart": true,
+        "console": "integratedTerminal",
+        "skipFiles": ["<node_internals>/**"],
+        "runtimeArgs": ["--inspect"]
+      },
+      {
+        "name": "Run Seed",
+        "type": "node",
+        "request": "launch",
+        "program": "${workspaceFolder}/server/seed.js",
+        "cwd": "${workspaceFolder}/server",
+        "envFile": "${workspaceFolder}/server/.env",
+        "console": "integratedTerminal",
+        "skipFiles": ["<node_internals>/**"]
+      },
+      {
+        "name": "Run Workflow Tests",
+        "type": "node",
+        "request": "launch",
+        "program": "${workspaceFolder}/server/tests/workflow.test.js",
+        "cwd": "${workspaceFolder}/server",
+        "envFile": "${workspaceFolder}/server/.env",
+        "console": "integratedTerminal",
+        "skipFiles": ["<node_internals>/**"]
+      }
+    ],
+    "compounds": [
+      {
+        "name": "Full Stack (Server + Tests)",
+        "configurations": ["Start Server"]
+      }
+    ]
+  },
+  "tasks": {
+    "version": "2.0.0",
+    "tasks": [
+      {
+        "label": "Start Server",
+        "type": "shell",
+        "command": "npm run dev",
+        "options": { "cwd": "${workspaceFolder}/server" },
+        "group": "build",
+        "presentation": {
+          "reveal": "always",
+          "panel": "dedicated",
+          "group": "dev"
+        },
+        "runOptions": { "runOn": "default" },
+        "problemMatcher": []
+      },
+      {
+        "label": "Start Client (Vite Dev)",
+        "type": "shell",
+        "command": "npm run dev",
+        "options": { "cwd": "${workspaceFolder}/client" },
+        "group": "build",
+        "presentation": {
+          "reveal": "always",
+          "panel": "dedicated",
+          "group": "dev"
+        },
+        "problemMatcher": []
+      },
+      {
+        "label": "Seed Database",
+        "type": "shell",
+        "command": "node seed.js",
+        "options": { "cwd": "${workspaceFolder}/server" },
+        "group": "test",
+        "presentation": {
+          "reveal": "always",
+          "panel": "shared"
+        },
+        "problemMatcher": []
+      },
+      {
+        "label": "Run Workflow Tests",
+        "type": "shell",
+        "command": "node tests/workflow.test.js",
+        "options": { "cwd": "${workspaceFolder}/server" },
+        "group": "test",
+        "presentation": {
+          "reveal": "always",
+          "panel": "shared"
+        },
+        "problemMatcher": []
+      },
+      {
+        "label": "Install Server Deps",
+        "type": "shell",
+        "command": "npm install",
+        "options": { "cwd": "${workspaceFolder}/server" },
+        "group": "build",
+        "problemMatcher": []
+      },
+      {
+        "label": "Install Client Deps",
+        "type": "shell",
+        "command": "npm install",
+        "options": { "cwd": "${workspaceFolder}/client" },
+        "group": "build",
+        "problemMatcher": []
+      },
+      {
+        "label": "dev: Start Both",
+        "dependsOn": ["Start Server", "Start Client (Vite Dev)"],
+        "dependsOrder": "parallel",
+        "group": {
+          "kind": "build",
+          "isDefault": true
+        },
+        "problemMatcher": []
+      }
+    ]
+  }
+}
