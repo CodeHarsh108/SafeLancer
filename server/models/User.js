@@ -17,7 +17,8 @@ const userSchema = new mongoose.Schema({
     trim: true,
     match: [/^\S+@\S+\.\S+$/, 'Please enter a valid email address']
   },
-  password: { type: String, required: true, minlength: 8 },
+  password: { type: String, minlength: 8 },
+  googleId: { type: String, sparse: true },
   role: { type: String, enum: ['client', 'freelancer', 'admin'], required: true },
   rating: { type: Number, default: 0, min: 0, max: 5 },
   totalJobsCompleted: { type: Number, default: 0 },
@@ -33,7 +34,7 @@ userSchema.virtual('isLocked').get(function () {
 });
 
 userSchema.pre('save', async function (next) {
-  if (!this.isModified('password')) return next();
+  if (!this.isModified('password') || !this.password) return next();
   this.password = await bcrypt.hash(this.password, 12);
   next();
 });

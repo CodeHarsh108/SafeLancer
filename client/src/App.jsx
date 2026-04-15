@@ -16,6 +16,8 @@ import ChatRoom from './pages/ChatRoom'
 import InterviewRoom from './pages/InterviewRoom'
 import VerifyHash from './pages/VerifyHash'
 import AdminDashboard from './pages/AdminDashboard'
+import AuthCallback from './pages/AuthCallback'
+import GoogleComplete from './pages/GoogleComplete'
 
 function DashboardRedirect() {
   const user = JSON.parse(localStorage.getItem('user') || '{}')
@@ -32,6 +34,8 @@ export default function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/verify/:hash" element={<VerifyHash />} />
+        <Route path="/auth/callback" element={<AuthCallback />} />
+        <Route path="/auth/google/complete" element={<GoogleComplete />} />
 
         {/* Auto-redirect based on role */}
         <Route path="/" element={<ProtectedRoute><DashboardRedirect /></ProtectedRoute>} />

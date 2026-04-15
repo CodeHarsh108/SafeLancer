@@ -16,6 +16,7 @@ const io = new Server(server, {
 // Middleware
 app.use(cors());
 app.use(express.json());
+app.use(require('passport').initialize());
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Routes
@@ -54,18 +55,23 @@ io.on('connection', (socket) => {
   });
 
   socket.on('send-message', async (data) => {
-    const Message = require('./models/Message');
-    const msg = new Message({
-      contract: data.contractId,
-      sender: data.senderId,
-      senderName: data.senderName,
-      senderRole: data.senderRole,
-      text: data.text,
-      type: data.type || 'text',
-      meetingData: data.meetingData
-    });
-    await msg.save();
-    io.to(data.contractId).emit('receive-message', msg);
+    if (!data.senderId) return;
+    try {
+      const Message = require('./models/Message');
+      const msg = new Message({
+        contract: data.contractId,
+        sender: data.senderId,
+        senderName: data.senderName,
+        senderRole: data.senderRole,
+        text: data.text,
+        type: data.type || 'text',
+        meetingData: data.meetingData
+      });
+      await msg.save();
+      io.to(data.contractId).emit('receive-message', msg);
+    } catch (err) {
+      console.error('send-message error:', err.message);
+    }
   });
 
   socket.on('typing', (data) => {

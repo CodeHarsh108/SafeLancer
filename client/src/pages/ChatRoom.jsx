@@ -97,7 +97,7 @@ export default function ChatRoom() {
     socketRef.current?.emit('send-message', {
       contractId,
       text: text.trim(),
-      senderId: user._id,
+      senderId: user.id,
       senderName: user.name,
       senderRole: user.role,
     })
@@ -141,7 +141,7 @@ export default function ChatRoom() {
         socketRef.current?.emit('call-user', {
           contractId,
           signal,
-          from: user._id,
+          from: user.id,
           name: user.name,
         })
       })
@@ -278,7 +278,7 @@ export default function ChatRoom() {
               <p className="text-center text-zinc-400 py-8 text-sm">No messages yet. Say hello!</p>
             )}
             {messages.map((msg, i) => {
-              const isMine = msg.sender?._id === user._id || msg.senderId === user._id
+              const isMine = msg.sender?._id === user.id || msg.senderId === user.id
               return (
                 <div key={i} className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}>
                   <div className={`max-w-xs md:max-w-md px-4 py-2.5 rounded-xl text-sm ${

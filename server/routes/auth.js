@@ -1,10 +1,82 @@
 const express = require('express');
 const router = express.Router();
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
+const passport = require('passport');
+const { Strategy: GoogleStrategy } = require('passport-google-oauth20');
 const User = require('../models/User');
 const Portfolio = require('../models/Portfolio');
 const auth = require('../middleware/auth');
 const { calcCompletion } = require('../utils/profileCompletion');
+
+const FRONTEND_URL = process.env.CLIENT_URL || 'http://localhost:5173';
+const BACKEND_URL = process.env.SERVER_URL || 'http://localhost:5001';
+
+passport.use(new GoogleStrategy(
+  {
+    clientID: process.env.GOOGLE_CLIENT_ID,
+    clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+    callbackURL: `${BACKEND_URL}/api/auth/google/callback`,
+  },
+  (accessToken, refreshToken, profile, done) => done(null, profile)
+));
+
+// GET /api/auth/google
+router.get('/google', passport.authenticate('google', { scope: ['profile', 'email'], session: false }));
+
+// GET /api/auth/google/callback
+router.get(
+  '/google/callback',
+  passport.authenticate('google', { session: false, failureRedirect: `${FRONTEND_URL}/login?error=google_failed` }),
+  async (req, res) => {
+    try {
+      const profile = req.user;
+      const email = profile.emails[0].value;
+      const name = profile.displayName;
+      const googleId = profile.id;
+
+      let user = await User.findOne({ $or: [{ googleId }, { email }] });
+
+      if (user) {
+        if (!user.googleId) { user.googleId = googleId; await user.save(); }
+        const token = jwt.sign({ id: user._id, role: user.role, name: user.name }, process.env.JWT_SECRET, { expiresIn: '7d' });
+        const userParam = encodeURIComponent(JSON.stringify({ id: user._id, name: user.name, email: user.email, role: user.role, rating: user.rating || 0 }));
+        return res.redirect(`${FRONTEND_URL}/auth/callback?token=${token}&user=${userParam}`);
+      }
+
+      // New Google user — issue a short-lived pending token, redirect to role picker
+      const pending = jwt.sign({ googleId, email, name }, process.env.JWT_SECRET, { expiresIn: '10m' });
+      return res.redirect(`${FRONTEND_URL}/auth/google/complete?pending=${encodeURIComponent(pending)}`);
+    } catch (err) {
+      console.error('Google callback error:', err.message);
+      res.redirect(`${FRONTEND_URL}/login?error=google_failed`);
+    }
+  }
+);
+
+// POST /api/auth/google/complete — new Google users select their role
+router.post('/google/complete', async (req, res) => {
+  try {
+    const { pendingToken, role } = req.body;
+    if (!['client', 'freelancer'].includes(role)) {
+      return res.status(400).json({ message: 'Role must be client or freelancer' });
+    }
+    const decoded = jwt.verify(pendingToken, process.env.JWT_SECRET);
+    const { googleId, email, name } = decoded;
+
+    let user = await User.findOne({ $or: [{ googleId }, { email }] });
+    if (!user) {
+      user = new User({ name, email, googleId, role, password: crypto.randomBytes(32).toString('hex') });
+      await user.save();
+      await Portfolio.create({ user: user._id, role });
+    }
+
+    const token = jwt.sign({ id: user._id, role: user.role, name: user.name }, process.env.JWT_SECRET, { expiresIn: '7d' });
+    res.json({ token, user: { id: user._id, name: user.name, email: user.email, role: user.role } });
+  } catch (err) {
+    res.status(400).json({ message: 'Session expired. Please try signing in again.' });
+  }
+});
 
 // Strong password: min 8 chars, must have uppercase, lowercase, number, special char
 const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d]).{8,}$/;
