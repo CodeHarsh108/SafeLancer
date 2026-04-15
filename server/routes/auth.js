@@ -11,7 +11,9 @@ const FRONTEND_URL = process.env.CLIENT_URL || 'http://localhost:5173';
 const BACKEND_URL = process.env.SERVER_URL || 'http://localhost:5001';
 
 // GET /api/auth/google — redirect to Google consent screen
+// Accepts ?role=client|freelancer and encodes it in the OAuth state param
 router.get('/google', (req, res) => {
+  const role = ['client', 'freelancer'].includes(req.query.role) ? req.query.role : '';
   const params = new URLSearchParams({
     client_id: process.env.GOOGLE_CLIENT_ID,
     redirect_uri: `${BACKEND_URL}/api/auth/google/callback`,
@@ -19,13 +21,15 @@ router.get('/google', (req, res) => {
     scope: 'openid email profile',
     access_type: 'offline',
     prompt: 'select_account',
+    ...(role && { state: role }),
   });
   res.redirect(`https://accounts.google.com/o/oauth2/v2/auth?${params}`);
 });
 
 // GET /api/auth/google/callback — exchange code, find/create user, redirect to frontend
 router.get('/google/callback', async (req, res) => {
-  const { code, error } = req.query;
+  const { code, error, state } = req.query;
+  const roleFromState = ['client', 'freelancer'].includes(state) ? state : null;
   if (error || !code) return res.redirect(`${FRONTEND_URL}/login?error=google_failed`);
 
   try {
@@ -54,13 +58,24 @@ router.get('/google/callback', async (req, res) => {
     let user = await User.findOne({ $or: [{ googleId }, { email }] });
 
     if (user) {
+      // Existing user — log them in regardless of state
       if (!user.googleId) { user.googleId = googleId; await user.save(); }
       const token = jwt.sign({ id: user._id, role: user.role, name: user.name }, process.env.JWT_SECRET, { expiresIn: '7d' });
       const userParam = encodeURIComponent(JSON.stringify({ id: user._id, name: user.name, email: user.email, role: user.role, rating: user.rating || 0 }));
       return res.redirect(`${FRONTEND_URL}/auth/callback?token=${token}&user=${userParam}`);
     }
 
-    // New user — short-lived pending token, send to role picker
+    if (roleFromState) {
+      // New user with known role — create account directly, skip role picker
+      const newUser = new User({ name, email, googleId, role: roleFromState, password: crypto.randomBytes(32).toString('hex') });
+      await newUser.save();
+      await Portfolio.create({ user: newUser._id, role: roleFromState });
+      const token = jwt.sign({ id: newUser._id, role: newUser.role, name: newUser.name }, process.env.JWT_SECRET, { expiresIn: '7d' });
+      const userParam = encodeURIComponent(JSON.stringify({ id: newUser._id, name: newUser.name, email: newUser.email, role: newUser.role, rating: 0 }));
+      return res.redirect(`${FRONTEND_URL}/auth/callback?token=${token}&user=${userParam}`);
+    }
+
+    // New user, no role in state — fallback to role picker
     const pending = jwt.sign({ googleId, email, name }, process.env.JWT_SECRET, { expiresIn: '10m' });
     return res.redirect(`${FRONTEND_URL}/auth/google/complete?pending=${encodeURIComponent(pending)}`);
   } catch (err) {
