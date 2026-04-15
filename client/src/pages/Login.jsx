@@ -48,7 +48,7 @@ export default function Login() {
         <div className="text-sm text-zinc-500 mt-1">Secure Freelancing Platform</div>
       </div>
 
-      <div className="bg-white rounded-xl border border-zinc-200 p-8 w-full max-w-sm shadow-sm">
+      <div className="bg-white rounded-xl border border-zinc-200 p-8 w-full max-w-md shadow-sm">
         <h1 className="text-base font-semibold text-zinc-900 mb-1">Sign in</h1>
         <p className="text-sm text-zinc-500 mb-6">Enter your credentials to access your portals</p>
 

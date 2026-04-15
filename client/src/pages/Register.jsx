@@ -117,7 +117,7 @@ export default function Register() {
           <div className="text-sm text-zinc-500 mt-1">Escrow-protected freelancing</div>
         </div>
 
-        <div className="bg-white rounded-xl border border-zinc-200 p-8 w-full max-w-sm shadow-sm">
+        <div className="bg-white rounded-xl border border-zinc-200 p-8 w-full max-w-md shadow-sm">
           <h1 className="text-base font-semibold text-zinc-900 mb-1">Join FreeLock</h1>
           <p className="text-sm text-zinc-500 mb-6">How do you want to use FreeLock?</p>
 
@@ -189,7 +189,7 @@ export default function Register() {
         <div className="text-sm text-zinc-500 mt-1">Create your account</div>
       </div>
 
-      <div className="bg-white rounded-xl border border-zinc-200 p-8 w-full max-w-sm shadow-sm">
+      <div className="bg-white rounded-xl border border-zinc-200 p-8 w-full max-w-md shadow-sm">
         <div className="flex items-center justify-between mb-1">
           <h1 className="text-base font-semibold text-zinc-900">Create an account</h1>
           <button
