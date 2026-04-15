@@ -70,7 +70,8 @@ export default function Register() {
 
   const handleContinue = () => {
     if (!role) { toast.error('Please select your role to continue'); return }
-    setStep('form')
+    setExiting(true)
+    setTimeout(() => { setStep('form'); setExiting(false) }, 220)
   }
 
   const validate = () => {
@@ -121,12 +122,12 @@ export default function Register() {
       <div className="min-h-screen bg-zinc-100 flex flex-col items-center justify-center p-4">
         <Toaster />
 
-        <div className={`mb-8 text-center ${hx}`}>
+        <div key={`head-${step}`} className={`mb-8 text-center ${hx}`}>
           <div className="text-xl font-bold text-zinc-900 tracking-tight">FreeLock</div>
           <div className="text-sm text-zinc-500 mt-1">Escrow-protected freelancing</div>
         </div>
 
-        <div className={`bg-white rounded-xl border border-zinc-200 p-8 w-full max-w-md shadow-sm ${cx}`}>
+        <div key={`card-${step}`} className={`bg-white rounded-xl border border-zinc-200 p-8 w-full max-w-md shadow-sm ${cx}`}>
           <h1 className="text-base font-semibold text-zinc-900 mb-1">Join FreeLock</h1>
           <p className="text-sm text-zinc-500 mb-6">How do you want to use FreeLock?</p>
 
@@ -193,12 +194,12 @@ export default function Register() {
     <div className="min-h-screen bg-zinc-100 flex flex-col items-center justify-center p-4 py-10">
       <Toaster />
 
-      <div className={`mb-8 text-center ${hx}`}>
+      <div key={`head-${step}`} className={`mb-8 text-center ${hx}`}>
         <div className="text-xl font-bold text-zinc-900 tracking-tight">FreeLock</div>
         <div className="text-sm text-zinc-500 mt-1">Create your account</div>
       </div>
 
-      <div className={`bg-white rounded-xl border border-zinc-200 p-8 w-full max-w-md shadow-sm ${cx}`}>
+      <div key={`card-${step}`} className={`bg-white rounded-xl border border-zinc-200 p-8 w-full max-w-md shadow-sm ${cx}`}>
         <div className="flex items-center justify-between mb-1">
           <h1 className="text-base font-semibold text-zinc-900">Create an account</h1>
           <button
