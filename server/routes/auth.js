@@ -62,7 +62,9 @@ router.get('/google/callback', async (req, res) => {
       if (!user.googleId) { user.googleId = googleId; await user.save(); }
       const token = jwt.sign({ id: user._id, role: user.role, name: user.name }, process.env.JWT_SECRET, { expiresIn: '7d' });
       const userParam = encodeURIComponent(JSON.stringify({ id: user._id, name: user.name, email: user.email, role: user.role, rating: user.rating || 0 }));
-      return res.redirect(`${FRONTEND_URL}/auth/callback?token=${token}&user=${userParam}`);
+      // If the user signed in asking for a different role, flag it so the frontend can inform them
+      const mismatch = roleFromState && roleFromState !== user.role ? `&role_mismatch=${user.role}` : '';
+      return res.redirect(`${FRONTEND_URL}/auth/callback?token=${token}&user=${userParam}${mismatch}`);
     }
 
     if (roleFromState) {
