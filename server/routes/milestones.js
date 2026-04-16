@@ -15,6 +15,86 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage, limits: { fileSize: 50 * 1024 * 1024 } });
 
+// Initiate Razorpay payout to freelancer when milestone is released
+async function initiateFreelancerPayout(milestone) {
+  try {
+    const Portfolio = require('../models/Portfolio');
+    const freelancerPortfolio = await Portfolio.findOne({ user: milestone.freelancer });
+    if (!freelancerPortfolio?.payoutDetailsAdded) return; // no payout details saved yet
+
+    const isTestMode = !process.env.RAZORPAY_KEY_ID || process.env.RAZORPAY_KEY_ID.includes('placeholder');
+
+    if (isTestMode) {
+      await Milestone.findByIdAndUpdate(milestone._id, {
+        payoutId: 'payout_test_' + Date.now(),
+        payoutStatus: 'processed',
+        payoutInitiatedAt: new Date()
+      });
+      return;
+    }
+
+    const Razorpay = require('razorpay');
+    const razorpay = new Razorpay({ key_id: process.env.RAZORPAY_KEY_ID, key_secret: process.env.RAZORPAY_KEY_SECRET });
+    const User = require('../models/User');
+    const freelancer = await User.findById(milestone.freelancer);
+
+    // Create or reuse Razorpay Contact
+    let contactId = freelancerPortfolio.razorpayContactId;
+    if (!contactId) {
+      const contact = await razorpay.contacts.create({
+        name: freelancer?.name || 'Freelancer',
+        email: freelancer?.email || '',
+        type: 'vendor',
+        reference_id: milestone.freelancer.toString()
+      });
+      contactId = contact.id;
+      await Portfolio.findOneAndUpdate({ user: milestone.freelancer }, { razorpayContactId: contactId });
+    }
+
+    // Create or reuse Fund Account
+    let fundAccountId = freelancerPortfolio.razorpayFundAccountId;
+    if (!fundAccountId) {
+      const faData = { contact_id: contactId };
+      if (freelancerPortfolio.payoutMethod === 'upi') {
+        faData.account_type = 'vpa';
+        faData.vpa = { address: freelancerPortfolio.upiId };
+      } else {
+        faData.account_type = 'bank_account';
+        faData.bank_account = {
+          name: freelancerPortfolio.accountHolderName,
+          ifsc: freelancerPortfolio.ifscCode,
+          account_number: freelancerPortfolio.bankAccountNumber
+        };
+      }
+      const fa = await razorpay.fundAccount.create(faData);
+      fundAccountId = fa.id;
+      await Portfolio.findOneAndUpdate({ user: milestone.freelancer }, { razorpayFundAccountId: fundAccountId });
+    }
+
+    // Create Payout
+    const payout = await razorpay.payouts.create({
+      account_number: process.env.RAZORPAY_ACCOUNT_NUMBER,
+      fund_account_id: fundAccountId,
+      amount: Math.round(milestone.amount * 100),
+      currency: 'INR',
+      mode: freelancerPortfolio.payoutMethod === 'upi' ? 'UPI' : 'IMPS',
+      purpose: 'payout',
+      queue_if_low_balance: true,
+      reference_id: milestone._id.toString(),
+      narration: `FreeLock - ${milestone.title}`
+    });
+
+    await Milestone.findByIdAndUpdate(milestone._id, {
+      payoutId: payout.id,
+      payoutStatus: 'processing',
+      payoutInitiatedAt: new Date()
+    });
+  } catch (err) {
+    console.error('Payout initiation failed for milestone', milestone._id, ':', err.message);
+    await Milestone.findByIdAndUpdate(milestone._id, { payoutStatus: 'failed' });
+  }
+}
+
 // GET /api/milestones/contract/:contractId
 router.get('/contract/:contractId', auth, async (req, res) => {
   try {
@@ -198,13 +278,10 @@ router.post('/:id/release', auth, async (req, res) => {
     if (!milestone) return res.status(404).json({ message: 'Not found' });
     if (milestone.client.toString() !== req.user.id) return res.status(403).json({ message: 'Clients only' });
 
-    const isTestMode = !process.env.RAZORPAY_KEY_ID || process.env.RAZORPAY_KEY_ID.includes('placeholder');
-    if (milestone.razorpayPaymentId && !isTestMode && !milestone.razorpayPaymentId.startsWith('pay_test_')) {
-      // Razorpay captures payment at checkout time; initiate refund if needed via razorpay.payments.refund()
-      // Release = payout to freelancer (handled via Razorpay Payouts or manual)
-    }
-
     const updated = await milestoneTransition(milestone._id, 'released');
+
+    // Initiate payout to freelancer
+    await initiateFreelancerPayout(milestone);
 
     // Business rule: releasing Phase 1 (milestoneNumber===1) also unlocks the advance payment
     // Advance = milestoneNumber===0, isAdvance=true — it stays in 'approved' until Phase 1 releases

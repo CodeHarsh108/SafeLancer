@@ -5,6 +5,8 @@
 //   user      = full User doc (has rating, totalJobsCompleted, onTimeDeliveryRate, disputeRate)
 //   portfolio = Portfolio doc
 
+import { calcCompletion } from './profileCompletion'
+
 const BadgeIcons = {
   trophy: (
     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -139,7 +141,7 @@ export const FREELANCER_BADGES = [
     icon: BadgeIcons.checkCircle,
     title: 'Profile Complete',
     description: 'Reach 100% profile completion',
-    condition: (u, p) => (p?.completionPercent || 0) >= 100,
+    condition: (u, p) => calcCompletion('freelancer', p) >= 100,
     color: 'emerald',
   },
 ]
@@ -190,7 +192,7 @@ export const CLIENT_BADGES = [
     icon: BadgeIcons.checkCircle,
     title: 'Profile Complete',
     description: 'Reach 100% profile completion',
-    condition: (u, p) => (p?.completionPercent || 0) >= 100,
+    condition: (u, p) => calcCompletion('client', p) >= 100,
     color: 'emerald',
   },
 ]

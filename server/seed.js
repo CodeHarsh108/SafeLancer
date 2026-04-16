@@ -84,6 +84,36 @@ async function seed() {
 
   // ─── JOB 1: Existing contract + milestones (for payment flow demo) ───────
 
+  const job1Phases = [
+    {
+      title: 'User Authentication & Project Setup',
+      guideline: 'Setup React + Node.js boilerplate, implement JWT-based register/login, role-based dashboards for client and freelancer. Deliverable: working auth system with protected routes.',
+      deliverableType: 'Code File',
+      budgetPercent: 34,
+      phaseDeadline: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
+      maxRevisions: 2
+    },
+    {
+      title: 'Product Listing, Cart & Orders',
+      guideline: 'Build product catalog with search and filter, shopping cart with localStorage persistence, and order management system with status tracking.',
+      deliverableType: 'Code File',
+      budgetPercent: 33,
+      phaseDeadline: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000),
+      maxRevisions: 2
+    },
+    {
+      title: 'Razorpay Payment Integration & Checkout',
+      guideline: 'Integrate Razorpay payments into checkout flow, add payment history page, and generate PDF invoices for completed orders.',
+      deliverableType: 'Code File',
+      budgetPercent: 33,
+      phaseDeadline: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000),
+      maxRevisions: 2
+    }
+  ];
+  const job1Hash = crypto.createHash('sha256')
+    .update('Build E-Commerce Website with React & Node.js' + 'Need a full-stack e-commerce platform with user auth, product listing, cart, and Razorpay payments.' + job1Phases.map(p => p.title + p.guideline).join(''))
+    .digest('hex').substring(0, 16).toUpperCase();
+
   const job1 = new Job({
     client: client._id,
     title: 'Build E-Commerce Website with React & Node.js',
@@ -91,7 +121,17 @@ async function seed() {
     budget: 10000,
     skills: ['React', 'Node.js', 'MongoDB', 'Razorpay'],
     deadline: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-    status: 'in_progress'
+    status: 'in_progress',
+    category: 'Web Development',
+    experienceLevel: 'Mid',
+    advancePercent: 10,
+    verifiedOnly: false,
+    nda: false,
+    ipOwnership: 'client',
+    latePenalty: 5,
+    autoReleaseHours: 72,
+    scopeHash: job1Hash,
+    phases: job1Phases
   });
   await job1.save();
 
@@ -133,6 +173,7 @@ async function seed() {
     scope: 'React + Node.js + MongoDB + Razorpay integration',
     timeline: 30,
     milestoneCount: 3,
+    advancePercent: 10,
     status: 'active',
     startedAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000)
   });
@@ -210,6 +251,36 @@ async function seed() {
 
   const interviewRoomId = 'interview-' + crypto.randomUUID();
 
+  const job2Phases = [
+    {
+      title: 'UI Design & Component Library',
+      guideline: 'Create a Figma prototype for approval, then build the base component library: sidebar navigation, header, cards, data tables, and dark/light mode toggle. All components must be responsive.',
+      deliverableType: 'Design File',
+      budgetPercent: 30,
+      phaseDeadline: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      maxRevisions: 2
+    },
+    {
+      title: 'Charts, Graphs & Analytics Widgets',
+      guideline: 'Implement all data visualisation components: line charts, bar charts, pie charts, KPI cards, and date-range pickers using Recharts. Charts must animate on load and support live data refresh.',
+      deliverableType: 'Code File',
+      budgetPercent: 40,
+      phaseDeadline: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
+      maxRevisions: 2
+    },
+    {
+      title: 'REST API Integration & Role-Based Access',
+      guideline: 'Wire all widgets to the provided REST API endpoints, implement JWT-based role-based views (Admin / Viewer), add loading/error states, and write a README covering setup and environment variables.',
+      deliverableType: 'Code File',
+      budgetPercent: 30,
+      phaseDeadline: new Date(Date.now() + 20 * 24 * 60 * 60 * 1000),
+      maxRevisions: 1
+    }
+  ];
+  const job2Hash = crypto.createHash('sha256')
+    .update('Build React Dashboard with Charts & Analytics' + 'Looking for a React developer to build a responsive analytics dashboard.' + job2Phases.map(p => p.title + p.guideline).join(''))
+    .digest('hex').substring(0, 16).toUpperCase();
+
   const job2 = new Job({
     client: client._id,
     title: 'Build React Dashboard with Charts & Analytics',
@@ -218,6 +289,16 @@ async function seed() {
     skills: ['React', 'Tailwind CSS', 'Node.js', 'Recharts'],
     deadline: new Date(Date.now() + 20 * 24 * 60 * 60 * 1000),
     status: 'open',
+    category: 'Web Development',
+    experienceLevel: 'Mid',
+    advancePercent: 15,
+    verifiedOnly: false,
+    nda: false,
+    ipOwnership: 'client',
+    latePenalty: 0,
+    autoReleaseHours: 72,
+    scopeHash: job2Hash,
+    phases: job2Phases,
     bids: [
       // Sam: went through full pipeline → interviewed, waiting for client decision
       {
@@ -247,6 +328,36 @@ async function seed() {
 
   // ─── JOB 3: Fresh open job — zero applicants ─────────────────────────────
 
+  const job3Phases = [
+    {
+      title: 'App Setup & Workout Logging',
+      guideline: 'Initialize React Native project (Expo), set up navigation, implement user onboarding, and build the core workout logging screen: exercise search, sets/reps/weight input, and workout history list.',
+      deliverableType: 'Code File',
+      budgetPercent: 30,
+      phaseDeadline: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000),
+      maxRevisions: 2
+    },
+    {
+      title: 'Progress Charts & Push Notifications',
+      guideline: 'Build progress tracking charts (weekly/monthly volume, personal records), body weight log, and configure Firebase push notifications for workout reminders and streak alerts.',
+      deliverableType: 'Code File',
+      budgetPercent: 35,
+      phaseDeadline: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      maxRevisions: 2
+    },
+    {
+      title: 'Health API Integration & App Store Build',
+      guideline: 'Integrate Apple HealthKit and Google Fit APIs to sync steps and calories. Run full QA on iOS and Android. Deliver signed APK and IPA builds with a TestFlight / Play Store internal track release.',
+      deliverableType: 'APK',
+      budgetPercent: 35,
+      phaseDeadline: new Date(Date.now() + 45 * 24 * 60 * 60 * 1000),
+      maxRevisions: 1
+    }
+  ];
+  const job3Hash = crypto.createHash('sha256')
+    .update('Mobile App: Fitness Tracker (React Native)' + 'Build a cross-platform fitness tracking app. Features: workout logging, progress charts, push notifications, Apple Health / Google Fit integration.' + job3Phases.map(p => p.title + p.guideline).join(''))
+    .digest('hex').substring(0, 16).toUpperCase();
+
   const job3 = new Job({
     client: client._id,
     title: 'Mobile App: Fitness Tracker (React Native)',
@@ -254,7 +365,17 @@ async function seed() {
     budget: 80000,
     skills: ['React Native', 'Node.js', 'MongoDB', 'Firebase'],
     deadline: new Date(Date.now() + 45 * 24 * 60 * 60 * 1000),
-    status: 'open'
+    status: 'open',
+    category: 'Mobile',
+    experienceLevel: 'Senior',
+    advancePercent: 20,
+    verifiedOnly: true,
+    nda: true,
+    ipOwnership: 'client',
+    latePenalty: 10,
+    autoReleaseHours: 48,
+    scopeHash: job3Hash,
+    phases: job3Phases
   });
   await job3.save();
   console.log('Job 3 (open, no applicants yet) created');

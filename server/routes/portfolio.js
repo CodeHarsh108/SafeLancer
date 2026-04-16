@@ -109,6 +109,57 @@ router.post('/verify-payment', auth, async (req, res) => {
   }
 });
 
+// POST /api/portfolio/payout-details — freelancer saves bank/UPI payout info
+router.post('/payout-details', auth, async (req, res) => {
+  try {
+    if (req.user.role !== 'freelancer') return res.status(403).json({ message: 'Freelancers only' });
+    const { payoutMethod, bankAccountNumber, ifscCode, accountHolderName, upiId } = req.body;
+
+    if (!payoutMethod) return res.status(400).json({ message: 'Payout method is required' });
+
+    if (payoutMethod === 'bank') {
+      if (!bankAccountNumber || !ifscCode || !accountHolderName)
+        return res.status(400).json({ message: 'Bank account number, IFSC, and account holder name are required' });
+      if (!/^[A-Z]{4}0[A-Z0-9]{6}$/.test(ifscCode.toUpperCase()))
+        return res.status(400).json({ message: 'Invalid IFSC code format' });
+    }
+
+    if (payoutMethod === 'upi') {
+      if (!upiId || !upiId.includes('@'))
+        return res.status(400).json({ message: 'Valid UPI ID is required (e.g. name@upi)' });
+    }
+
+    const update = {
+      payoutMethod,
+      payoutDetailsAdded: true,
+      // Reset Razorpay cached IDs when details change
+      razorpayContactId: '',
+      razorpayFundAccountId: ''
+    };
+
+    if (payoutMethod === 'bank') {
+      update.bankAccountNumber = bankAccountNumber;
+      update.ifscCode = ifscCode.toUpperCase();
+      update.accountHolderName = accountHolderName;
+      update.upiId = '';
+    } else {
+      update.upiId = upiId;
+      update.bankAccountNumber = '';
+      update.ifscCode = '';
+      update.accountHolderName = '';
+    }
+
+    const portfolio = await Portfolio.findOneAndUpdate(
+      { user: req.user.id },
+      { $set: update },
+      { new: true, upsert: true }
+    );
+    res.json({ success: true, payoutMethod: portfolio.payoutMethod, payoutDetailsAdded: true });
+  } catch (err) {
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+});
+
 // POST /api/portfolio/upload-sample
 router.post('/upload-sample', auth, upload.single('file'), async (req, res) => {
   try {

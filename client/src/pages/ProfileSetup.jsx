@@ -634,6 +634,15 @@ function ProfileEditForm({ portfolio, user, onSave, onCancel }) {
   const [sampleTitle, setSampleTitle] = useState('')
   const [localPortfolio, setLocalPortfolio] = useState(portfolio)
   const [saving, setSaving] = useState(false)
+  const [payoutForm, setPayoutForm] = useState({
+    payoutMethod: portfolio?.payoutMethod || '',
+    bankAccountNumber: portfolio?.bankAccountNumber || '',
+    ifscCode: portfolio?.ifscCode || '',
+    accountHolderName: portfolio?.accountHolderName || '',
+    upiId: portfolio?.upiId || '',
+  })
+  const [payoutSaving, setPayoutSaving] = useState(false)
+  const [payoutSaved, setPayoutSaved] = useState(!!portfolio?.payoutDetailsAdded)
 
   const isIndividual = form.clientType === 'individual'
   const isBusiness = form.clientType === 'business'
@@ -1095,6 +1104,85 @@ function ProfileEditForm({ portfolio, user, onSave, onCancel }) {
               </>
             )}
           </div>
+        </div>
+      )}
+
+      {/* ── Freelancer: Payout Details ── */}
+      {isFreelancer && (
+        <div className="bg-white rounded-xl border border-zinc-200 p-6">
+          <div className="flex items-center justify-between mb-1">
+            <h3 className="text-sm font-semibold text-zinc-900">Payout Details</h3>
+            {payoutSaved && (
+              <span className="text-xs font-medium bg-emerald-50 text-emerald-700 px-2.5 py-1 rounded-md">Saved</span>
+            )}
+          </div>
+          <p className="text-xs text-zinc-500 mb-4">Where we send your milestone payments when released</p>
+
+          {/* Method toggle */}
+          <div className="flex gap-2 mb-4">
+            {['bank', 'upi'].map(m => (
+              <button key={m} type="button"
+                onClick={() => setPayoutForm({ ...payoutForm, payoutMethod: m })}
+                className={`flex-1 py-2.5 rounded-lg text-sm font-semibold border transition-colors ${payoutForm.payoutMethod === m ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-700 border-zinc-200 hover:border-zinc-400'}`}>
+                {m === 'bank' ? 'Bank Account' : 'UPI'}
+              </button>
+            ))}
+          </div>
+
+          {payoutForm.payoutMethod === 'bank' && (
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs font-medium text-zinc-600 mb-1 block">Account Holder Name</label>
+                <input value={payoutForm.accountHolderName}
+                  onChange={e => setPayoutForm({ ...payoutForm, accountHolderName: e.target.value })}
+                  className={inputClass(false)} placeholder="As per bank records" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-medium text-zinc-600 mb-1 block">Account Number</label>
+                  <input value={payoutForm.bankAccountNumber}
+                    onChange={e => setPayoutForm({ ...payoutForm, bankAccountNumber: e.target.value })}
+                    className={inputClass(false)} placeholder="e.g. 9876543210" />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-zinc-600 mb-1 block">IFSC Code</label>
+                  <input value={payoutForm.ifscCode}
+                    onChange={e => setPayoutForm({ ...payoutForm, ifscCode: e.target.value.toUpperCase() })}
+                    className={inputClass(false)} placeholder="e.g. SBIN0001234" maxLength={11} />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {payoutForm.payoutMethod === 'upi' && (
+            <div>
+              <label className="text-xs font-medium text-zinc-600 mb-1 block">UPI ID</label>
+              <input value={payoutForm.upiId}
+                onChange={e => setPayoutForm({ ...payoutForm, upiId: e.target.value })}
+                className={inputClass(false)} placeholder="name@upi or phone@bank" />
+            </div>
+          )}
+
+          {payoutForm.payoutMethod && (
+            <button type="button" disabled={payoutSaving}
+              onClick={async () => {
+                setPayoutSaving(true)
+                try {
+                  await api.post('/api/portfolio/payout-details', payoutForm)
+                  setPayoutSaved(true)
+                  toast.success('Payout details saved')
+                } catch (err) {
+                  toast.error(err.response?.data?.message || 'Failed to save payout details')
+                } finally { setPayoutSaving(false) }
+              }}
+              className="mt-4 w-full bg-zinc-900 hover:bg-zinc-800 text-white font-medium py-2.5 rounded-lg text-sm transition-colors disabled:opacity-50">
+              {payoutSaving ? 'Saving…' : 'Save Payout Details'}
+            </button>
+          )}
+
+          {!payoutForm.payoutMethod && (
+            <p className="text-xs text-zinc-400 text-center py-2">Select a payout method above to get started</p>
+          )}
         </div>
       )}
 

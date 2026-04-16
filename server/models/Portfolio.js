@@ -30,9 +30,18 @@ const portfolioSchema = new mongoose.Schema({
   projectsPosted: { type: Number, default: 0 },
   projectsCompleted: { type: Number, default: 0 },
   avgBudget: { type: Number, default: 0 },
-  paymentVerified: { type: Boolean, default: false },
-  completionPercent: { type: Number, default: 20 },
-  isVisible: { type: Boolean, default: true }
+  paymentVerified:        { type: Boolean, default: false },
+  // Freelancer payout details
+  payoutMethod:           { type: String, enum: ['bank', 'upi', ''], default: '' },
+  bankAccountNumber:      { type: String, default: '' },
+  ifscCode:               { type: String, default: '' },
+  accountHolderName:      { type: String, default: '' },
+  upiId:                  { type: String, default: '' },
+  razorpayContactId:      { type: String, default: '' },
+  razorpayFundAccountId:  { type: String, default: '' },
+  payoutDetailsAdded:     { type: Boolean, default: false },
+  completionPercent:      { type: Number, default: 20 },
+  isVisible:              { type: Boolean, default: true }
 }, { timestamps: true });
 
 module.exports = mongoose.model('Portfolio', portfolioSchema);

@@ -206,6 +206,29 @@ export default function ContractDashboard() {
                 </div>
               )}
 
+              {/* Payout status — freelancer only, released milestones */}
+              {user.role === 'freelancer' && m.status === 'released' && (
+                <div className={`flex items-center justify-between p-3 rounded-lg border text-sm mb-3 ${
+                  m.payoutStatus === 'processed' ? 'bg-emerald-50 border-emerald-200' :
+                  m.payoutStatus === 'processing' ? 'bg-blue-50 border-blue-200' :
+                  m.payoutStatus === 'failed' ? 'bg-red-50 border-red-200' :
+                  'bg-zinc-50 border-zinc-200'
+                }`}>
+                  <span className={`font-medium ${
+                    m.payoutStatus === 'processed' ? 'text-emerald-700' :
+                    m.payoutStatus === 'processing' ? 'text-blue-700' :
+                    m.payoutStatus === 'failed' ? 'text-red-700' :
+                    'text-zinc-600'
+                  }`}>
+                    {m.payoutStatus === 'processed' ? 'Payment sent to your account' :
+                     m.payoutStatus === 'processing' ? 'Payment in progress...' :
+                     m.payoutStatus === 'failed' ? 'Payout failed — contact support' :
+                     'Payout pending — add bank/UPI in your profile'}
+                  </span>
+                  <span className="font-bold text-zinc-900">₹{m.amount?.toLocaleString()}</span>
+                </div>
+              )}
+
               {/* CLIENT ACTIONS */}
               {user.role === 'client' && (
                 <div className="space-y-2">

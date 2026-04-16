@@ -168,6 +168,102 @@ export default function JobDetail() {
           )}
         </div>
 
+        {/* Phase Breakdown */}
+        {job.phases?.length > 0 && (
+          <div className="bg-white rounded-xl border border-zinc-200 p-6 mb-5">
+            <h2 className="text-base font-semibold text-zinc-900 mb-1">Project Phases</h2>
+            <p className="text-xs text-zinc-500 mb-4">Scope locked with hash: <span className="font-mono text-zinc-700">{job.scopeHash}</span></p>
+            <div className="space-y-3">
+              {job.phases.map((phase, i) => {
+                const phaseAmount = job.budget
+                  ? Math.round((job.budget - Math.round(job.budget * (job.advancePercent || 10) / 100)) * phase.budgetPercent / 100)
+                  : null
+                return (
+                  <div key={i} className="border border-zinc-100 rounded-xl p-4">
+                    <div className="flex items-start justify-between gap-3 mb-2">
+                      <div className="flex items-center gap-2">
+                        <span className="w-6 h-6 bg-zinc-900 text-white text-xs font-bold rounded-lg flex items-center justify-center flex-shrink-0">{i + 1}</span>
+                        <span className="font-medium text-zinc-900 text-sm">{phase.title}</span>
+                      </div>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <span className="text-xs text-zinc-500 bg-zinc-100 px-2 py-0.5 rounded-md">{phase.deliverableType}</span>
+                        {phaseAmount && <span className="text-sm font-semibold text-zinc-900">₹{phaseAmount.toLocaleString()}</span>}
+                      </div>
+                    </div>
+                    <p className="text-sm text-zinc-600 leading-relaxed ml-8">{phase.guideline}</p>
+                    <div className="flex gap-4 mt-2 ml-8 text-xs text-zinc-400">
+                      <span>Deadline: {new Date(phase.phaseDeadline).toLocaleDateString()}</span>
+                      <span>Max revisions: {phase.maxRevisions}</span>
+                      <span>{phase.budgetPercent}% of project</span>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+
+            {/* Advance info */}
+            <div className="mt-3 p-3 bg-zinc-50 rounded-lg border border-zinc-100 flex items-center justify-between text-sm">
+              <span className="text-zinc-600">Advance payment (locked at hire, released after Phase 1):</span>
+              <span className="font-semibold text-zinc-900">
+                {job.advancePercent || 10}% = ₹{Math.round(job.budget * (job.advancePercent || 10) / 100).toLocaleString()}
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* Reference Files */}
+        {job.referenceFiles?.length > 0 && (
+          <div className="bg-white rounded-xl border border-zinc-200 p-6 mb-5">
+            <h2 className="text-base font-semibold text-zinc-900 mb-1">Reference Files</h2>
+            <p className="text-xs text-zinc-500 mb-3">SHA-256 hashed — tamper-proof evidence baseline</p>
+            <div className="space-y-2">
+              {job.referenceFiles.map((f, i) => (
+                <div key={i} className="flex items-center gap-3 p-3 bg-zinc-50 rounded-lg border border-zinc-100">
+                  <svg className="w-4 h-4 text-zinc-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-zinc-800 truncate">{f.originalName}</p>
+                    <p className="text-xs text-zinc-400 font-mono truncate">{f.fileHash}</p>
+                  </div>
+                  <a href={`${import.meta.env.VITE_API_URL || 'http://localhost:5001'}${f.url}`}
+                    target="_blank" rel="noopener noreferrer"
+                    className="text-xs text-zinc-600 hover:text-zinc-900 border border-zinc-200 px-2.5 py-1.5 rounded-lg transition-colors">
+                    Download
+                  </a>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Terms */}
+        {(job.nda || job.latePenalty > 0 || job.ipOwnership) && (
+          <div className="bg-white rounded-xl border border-zinc-200 p-6 mb-5">
+            <h2 className="text-base font-semibold text-zinc-900 mb-3">Project Terms</h2>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="p-3 bg-zinc-50 rounded-lg border border-zinc-100">
+                <p className="text-xs text-zinc-500 mb-0.5">NDA</p>
+                <p className="text-sm font-medium text-zinc-900">{job.nda ? 'Required' : 'Not required'}</p>
+              </div>
+              <div className="p-3 bg-zinc-50 rounded-lg border border-zinc-100">
+                <p className="text-xs text-zinc-500 mb-0.5">IP Ownership</p>
+                <p className="text-sm font-medium text-zinc-900">{job.ipOwnership === 'client' ? 'Client owns all deliverables' : 'Freelancer retains license'}</p>
+              </div>
+              {job.latePenalty > 0 && (
+                <div className="p-3 bg-zinc-50 rounded-lg border border-zinc-100">
+                  <p className="text-xs text-zinc-500 mb-0.5">Late Penalty</p>
+                  <p className="text-sm font-medium text-zinc-900">{job.latePenalty}% per phase if deadline missed</p>
+                </div>
+              )}
+              <div className="p-3 bg-zinc-50 rounded-lg border border-zinc-100">
+                <p className="text-xs text-zinc-500 mb-0.5">Auto-release Timer</p>
+                <p className="text-sm font-medium text-zinc-900">{job.autoReleaseHours === 168 ? '7 days' : `${job.autoReleaseHours || 72} hours`} after submission</p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Freelancer: apply */}
         {user.role === 'freelancer' && job.status === 'open' && !myBid && (
           <div className="bg-white rounded-xl border border-zinc-200 p-6 mb-5">

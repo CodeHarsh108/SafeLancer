@@ -31,7 +31,10 @@ const milestoneSchema = new mongoose.Schema({
   releasedAt: Date,
   meetingScheduledAt: Date,
   meetingRoomId: String,
-  meetingStatus: { type: String, enum: ['not_scheduled', 'scheduled', 'completed'], default: 'not_scheduled' }
+  meetingStatus: { type: String, enum: ['not_scheduled', 'scheduled', 'completed'], default: 'not_scheduled' },
+  payoutId:           { type: String, default: '' },
+  payoutStatus:       { type: String, enum: ['pending', 'processing', 'processed', 'failed', ''], default: '' },
+  payoutInitiatedAt:  Date
 }, { timestamps: true });
 
 module.exports = mongoose.model('Milestone', milestoneSchema);

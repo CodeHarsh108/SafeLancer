@@ -6,45 +6,71 @@ const Milestone = require('../models/Milestone');
 const Job = require('../models/Job');
 const auth = require('../middleware/auth');
 
-// Helper: generate milestones from agreed contract
-async function createMilestonesForContract(contract) {
+// Helper: generate milestones from contract + job phases
+async function createMilestonesForContract(contract, phases = [], advancePercent = 10) {
   const total = contract.amount;
-  const count = contract.milestoneCount;
   const now = new Date();
   const days = contract.timeline || 30;
   const milestones = [];
 
-  // Advance: 10%
+  const advanceAmount = Math.round(total * advancePercent / 100);
+
   milestones.push({
     contract: contract._id,
     client: contract.client,
     freelancer: contract.freelancer,
     milestoneNumber: 0,
     isAdvance: true,
-    title: 'Advance Payment (10%)',
+    title: `Advance Payment (${advancePercent}%)`,
     description: 'Initial advance — released after Phase 1 approval',
-    amount: Math.round(total * 0.10),
+    amount: advanceAmount,
     deadline: new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000),
     status: 'pending_deposit'
   });
 
-  const phasePercent = 0.90 / count;
-  const phaseAmount = Math.round(total * phasePercent);
-  const daysPerPhase = Math.round(days / count);
+  const remaining = total - advanceAmount;
 
-  for (let i = 1; i <= count; i++) {
-    milestones.push({
-      contract: contract._id,
-      client: contract.client,
-      freelancer: contract.freelancer,
-      milestoneNumber: i,
-      isAdvance: false,
-      title: `Phase ${i}`,
-      description: contract.scope ? `Phase ${i} of: ${contract.scope}` : `Phase ${i}`,
-      amount: i === count ? (total - Math.round(total * 0.10) - phaseAmount * (count - 1)) : phaseAmount,
-      deadline: new Date(now.getTime() + daysPerPhase * i * 24 * 60 * 60 * 1000),
-      status: 'pending_deposit'
+  if (phases && phases.length > 0) {
+    let allocated = 0;
+    phases.forEach((phase, i) => {
+      const isLast = i === phases.length - 1;
+      const phaseAmount = isLast
+        ? remaining - allocated
+        : Math.round(remaining * phase.budgetPercent / 100);
+      allocated += phaseAmount;
+
+      milestones.push({
+        contract: contract._id,
+        client: contract.client,
+        freelancer: contract.freelancer,
+        milestoneNumber: i + 1,
+        isAdvance: false,
+        title: phase.title,
+        description: `${phase.guideline}\n\nDeliverable: ${phase.deliverableType || 'Other'}`,
+        amount: phaseAmount,
+        deadline: phase.phaseDeadline || new Date(now.getTime() + (days / phases.length) * (i + 1) * 24 * 60 * 60 * 1000),
+        status: 'pending_deposit'
+      });
     });
+  } else {
+    const count = contract.milestoneCount || 3;
+    const phaseAmount = Math.round(remaining / count);
+    const daysPerPhase = Math.round(days / count);
+
+    for (let i = 1; i <= count; i++) {
+      milestones.push({
+        contract: contract._id,
+        client: contract.client,
+        freelancer: contract.freelancer,
+        milestoneNumber: i,
+        isAdvance: false,
+        title: `Phase ${i}`,
+        description: contract.scope ? `Phase ${i} of: ${contract.scope}` : `Phase ${i}`,
+        amount: i === count ? (remaining - phaseAmount * (count - 1)) : phaseAmount,
+        deadline: new Date(now.getTime() + daysPerPhase * i * 24 * 60 * 60 * 1000),
+        status: 'pending_deposit'
+      });
+    }
   }
 
   await Milestone.insertMany(milestones);
@@ -143,6 +169,11 @@ router.post('/:id/respond', auth, async (req, res) => {
       neg.agreedAt = new Date();
       await neg.save();
 
+      // Get job phases + advancePercent
+      const job = await Job.findById(neg.job);
+      const phases = job?.phases || [];
+      const advancePercent = job?.advancePercent || 10;
+
       // Create Contract
       const contract = new Contract({
         job: neg.job,
@@ -152,7 +183,8 @@ router.post('/:id/respond', auth, async (req, res) => {
         amount: neg.agreedAmount,
         scope: neg.agreedScope,
         timeline: neg.agreedTimeline,
-        milestoneCount: neg.agreedMilestoneCount,
+        milestoneCount: phases.length || neg.agreedMilestoneCount,
+        advancePercent,
         status: 'active'
       });
       await contract.save();
@@ -160,8 +192,8 @@ router.post('/:id/respond', auth, async (req, res) => {
       // Update job status
       await Job.findByIdAndUpdate(neg.job, { status: 'in_progress' });
 
-      // Create milestones
-      const milestones = await createMilestonesForContract(contract);
+      // Create milestones from job phases
+      const milestones = await createMilestonesForContract(contract, phases, advancePercent);
 
       return res.json({ negotiation: neg, contract, milestones });
     }
