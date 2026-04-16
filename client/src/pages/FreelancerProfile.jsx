@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom'
 import api from '../api'
 import Navbar from '../components/Navbar'
 import toast, { Toaster } from 'react-hot-toast'
+import { computeBadges, BADGE_COLORS } from '../utils/badges'
 
 const FILE_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5001'
 
@@ -154,6 +155,32 @@ export default function FreelancerProfile() {
             </div>
           </div>
         )}
+
+        {/* Badges */}
+        {(() => {
+          const { earned } = computeBadges('freelancer', profile.user, profile)
+          if (earned.length === 0) return null
+          return (
+            <div className="bg-white rounded-xl border border-zinc-200 p-5 mb-4">
+              <h2 className="text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-3">
+                Badges & Achievements
+                <span className="ml-2 text-zinc-300 font-normal normal-case tracking-normal">{earned.length} earned</span>
+              </h2>
+              <div className="flex flex-wrap gap-2">
+                {earned.map(badge => {
+                  const c = BADGE_COLORS[badge.color]
+                  return (
+                    <div key={badge.id} title={badge.description}
+                      className={`flex items-center gap-2 border rounded-xl px-3 py-2 ${c.earned}`}>
+                      <span className="text-sm">{badge.icon}</span>
+                      <span className="text-xs font-semibold whitespace-nowrap">{badge.title}</span>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )
+        })()}
 
         {/* Resume */}
         {profile.resumeUrl && (

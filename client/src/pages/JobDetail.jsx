@@ -143,7 +143,10 @@ export default function JobDetail() {
           {job.client && (
             <div className="mt-4 p-3 bg-zinc-50 rounded-lg text-sm border border-zinc-100">
               <span className="text-zinc-500">Posted by: </span>
-              <span className="font-medium text-zinc-700">{job.client.name}</span>
+              {user.role === 'freelancer'
+                ? <Link to={`/clients/${job.client._id}`} className="font-medium text-zinc-700 hover:text-zinc-900 hover:underline underline-offset-2 transition-colors">{job.client.name}</Link>
+                : <span className="font-medium text-zinc-700">{job.client.name}</span>
+              }
               {job.client.rating > 0 && <span className="ml-2 text-amber-600 text-xs">★ {job.client.rating}</span>}
             </div>
           )}
@@ -230,7 +233,7 @@ export default function JobDetail() {
                     <div className="flex items-start gap-3">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1">
-                          <span className="font-medium text-zinc-900">{b.freelancer?.name}</span>
+                          <Link to={`/freelancers/${b.freelancer?._id}`} className="font-medium text-zinc-900 hover:underline underline-offset-2 transition-colors">{b.freelancer?.name}</Link>
                           {b.freelancer?.rating > 0 && (
                             <span className="text-amber-600 text-xs">★ {b.freelancer.rating}</span>
                           )}

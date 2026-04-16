@@ -12,6 +12,7 @@ import ContractDashboard from './pages/ContractDashboard'
 import NegotiationRoom from './pages/NegotiationRoom'
 import FreelancerBrowse from './pages/FreelancerBrowse'
 import FreelancerProfile from './pages/FreelancerProfile'
+import ClientProfile from './pages/ClientProfile'
 import ChatRoom from './pages/ChatRoom'
 import InterviewRoom from './pages/InterviewRoom'
 import VerifyHash from './pages/VerifyHash'
@@ -55,6 +56,7 @@ export default function App() {
         {/* Freelancers */}
         <Route path="/freelancers" element={<ProtectedRoute role="client"><FreelancerBrowse /></ProtectedRoute>} />
         <Route path="/freelancers/:userId" element={<ProtectedRoute><FreelancerProfile /></ProtectedRoute>} />
+        <Route path="/clients/:userId" element={<ProtectedRoute><ClientProfile /></ProtectedRoute>} />
 
         {/* Contracts & Milestones */}
         <Route path="/contracts/:id" element={<ProtectedRoute><ContractDashboard /></ProtectedRoute>} />

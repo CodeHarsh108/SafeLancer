@@ -137,7 +137,10 @@ export default function ContractDashboard() {
               <div className="text-xs text-zinc-400 font-mono mb-1">CONTRACT #{contract.hashId}</div>
               <h1 className="text-xl font-semibold text-zinc-900">{contract.job?.title}</h1>
               <div className="text-zinc-500 text-sm mt-1">
-                {user.role === 'client' ? `Freelancer: ${contract.freelancer?.name}` : `Client: ${contract.client?.name}`}
+                {user.role === 'client'
+                  ? <><span className="text-zinc-400">Freelancer: </span><Link to={`/freelancers/${contract.freelancer?._id}`} className="text-zinc-700 hover:text-zinc-900 hover:underline underline-offset-2 font-medium transition-colors">{contract.freelancer?.name}</Link></>
+                  : <><span className="text-zinc-400">Client: </span><Link to={`/clients/${contract.client?._id}`} className="text-zinc-700 hover:text-zinc-900 hover:underline underline-offset-2 font-medium transition-colors">{contract.client?.name}</Link></>
+                }
                 {' · '}Total: <strong className="text-zinc-700">₹{contract.amount?.toLocaleString()}</strong>
                 {' · '}{contract.milestoneCount} phases
               </div>

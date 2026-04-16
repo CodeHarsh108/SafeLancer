@@ -18,7 +18,7 @@ const upload = multer({ storage, limits: { fileSize: 10 * 1024 * 1024 } });
 router.get('/:userId', async (req, res) => {
   try {
     const portfolio = await Portfolio.findOne({ user: req.params.userId })
-      .populate('user', 'name email role rating totalJobsCompleted onTimeDeliveryRate');
+      .populate('user', 'name email role rating totalJobsCompleted onTimeDeliveryRate disputeRate');
     if (!portfolio) return res.status(404).json({ message: 'Portfolio not found' });
     res.json(portfolio);
   } catch (err) {
@@ -29,8 +29,17 @@ router.get('/:userId', async (req, res) => {
 // POST /api/portfolio/update
 router.post('/update', auth, async (req, res) => {
   try {
-    const { bio, skills, githubUrl, linkedinUrl, portfolioUrl, hourlyRate, availability, companyName, industry } = req.body;
-    const update = { bio, skills, githubUrl, linkedinUrl, portfolioUrl, hourlyRate, availability, companyName, industry };
+    const {
+      bio, skills, githubUrl, linkedinUrl, portfolioUrl, hourlyRate, availability,
+      companyName, industry,
+      // new client fields
+      clientType, location, yearsHiring, preferredComm, companySize, websiteUrl
+    } = req.body;
+    const update = {
+      bio, skills, githubUrl, linkedinUrl, portfolioUrl, hourlyRate, availability,
+      companyName, industry,
+      clientType, location, yearsHiring, preferredComm, companySize, websiteUrl
+    };
 
     // Fetch current portfolio to include existing projectSamples/resumeUrl in completion calc
     const existing = await Portfolio.findOne({ user: req.user.id });
@@ -38,6 +47,7 @@ router.post('/update', auth, async (req, res) => {
       ...update,
       projectSamples: existing?.projectSamples || [],
       resumeUrl: existing?.resumeUrl || '',
+      avatarUrl: update.avatarUrl || existing?.avatarUrl || '',
       paymentVerified: existing?.paymentVerified || false,
       role: existing?.role || req.user.role
     };
@@ -49,6 +59,50 @@ router.post('/update', auth, async (req, res) => {
       { new: true, upsert: true }
     );
     res.json(portfolio);
+  } catch (err) {
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+});
+
+// POST /api/portfolio/upload-avatar
+router.post('/upload-avatar', auth, upload.single('avatar'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ message: 'No file uploaded' });
+    const avatarUrl = '/uploads/' + req.file.filename;
+    const existing = await Portfolio.findOne({ user: req.user.id });
+    const portfolio = await Portfolio.findOneAndUpdate(
+      { user: req.user.id },
+      { $set: { avatarUrl } },
+      { new: true, upsert: true }
+    );
+    const mergedData = {
+      ...portfolio.toObject(),
+      avatarUrl,
+      paymentVerified: existing?.paymentVerified || false,
+      role: portfolio.role || req.user.role
+    };
+    const completion = calcCompletion(mergedData.role, mergedData);
+    await Portfolio.findOneAndUpdate({ user: req.user.id }, { $set: { completionPercent: completion } });
+    res.json({ avatarUrl, completionPercent: completion });
+  } catch (err) {
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+});
+
+// POST /api/portfolio/verify-payment
+// In production this would be triggered by a Razorpay webhook after adding a payment method.
+// For now it's a direct call clients can make to mark their payment method as verified.
+router.post('/verify-payment', auth, async (req, res) => {
+  try {
+    if (req.user.role !== 'client') return res.status(403).json({ message: 'Clients only' });
+    const portfolio = await Portfolio.findOneAndUpdate(
+      { user: req.user.id },
+      { $set: { paymentVerified: true } },
+      { new: true, upsert: true }
+    );
+    const completion = calcCompletion(portfolio.role, portfolio);
+    await Portfolio.findOneAndUpdate({ user: req.user.id }, { $set: { completionPercent: completion } });
+    res.json({ paymentVerified: true, completionPercent: completion });
   } catch (err) {
     res.status(500).json({ message: 'Server error', error: err.message });
   }
