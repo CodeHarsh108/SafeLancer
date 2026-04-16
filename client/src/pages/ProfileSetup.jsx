@@ -1451,7 +1451,7 @@ export default function ProfileSetup() {
 
       {/* Edit mode */}
       {mode === 'edit' && (
-        <div className="max-w-2xl mx-auto p-6 pb-16">
+        <div className="max-w-3xl mx-auto p-6 pb-16">
           <div className="flex items-center justify-between mb-5">
             <div>
               <h1 className="text-xl font-semibold text-zinc-900">My Profile</h1>

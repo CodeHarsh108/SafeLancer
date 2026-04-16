@@ -3,11 +3,15 @@ import { Link, useNavigate } from 'react-router-dom'
 import api from '../api'
 import Navbar from '../components/Navbar'
 import toast, { Toaster } from 'react-hot-toast'
+import { calcCompletion } from '../utils/profileCompletion'
+
+const FILE_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5001'
 
 export default function ClientDashboard() {
   const [contracts, setContracts] = useState([])
   const [jobs, setJobs] = useState([])
   const [negotiations, setNegotiations] = useState([])
+  const [portfolio, setPortfolio] = useState(null)
   const [loading, setLoading] = useState(true)
   const [actionLoading, setActionLoading] = useState(null)
   const user = JSON.parse(localStorage.getItem('user') || '{}')
@@ -17,11 +21,13 @@ export default function ClientDashboard() {
     Promise.all([
       api.get('/api/contracts/my-contracts'),
       api.get('/api/jobs/my-jobs'),
-      api.get('/api/negotiations/my-negotiations')
-    ]).then(([c, j, n]) => {
+      api.get('/api/negotiations/my-negotiations'),
+      api.get('/api/auth/me')
+    ]).then(([c, j, n, me]) => {
       setContracts(c.data)
       setJobs(j.data)
       setNegotiations(n.data.filter(n => n.status === 'active'))
+      setPortfolio(me.data.portfolio)
     }).catch(() => toast.error('Failed to load data'))
       .finally(() => setLoading(false))
   }, [])
@@ -79,6 +85,48 @@ export default function ClientDashboard() {
             </Link>
           </div>
         </div>
+
+        {/* My Profile */}
+        {portfolio !== null && (
+          <div className="bg-white rounded-xl border border-zinc-200 p-4 mb-6 flex items-center gap-4">
+            {/* Avatar */}
+            {portfolio?.avatarUrl
+              ? <img src={portfolio.avatarUrl.startsWith('http') ? portfolio.avatarUrl : `${FILE_BASE}${portfolio.avatarUrl}`}
+                  alt="avatar" className="w-12 h-12 rounded-xl object-cover border border-zinc-200 flex-shrink-0" />
+              : <div className="w-12 h-12 bg-zinc-900 rounded-xl flex items-center justify-center text-white text-lg font-bold flex-shrink-0">
+                  {user.name?.[0]?.toUpperCase()}
+                </div>
+            }
+            {/* Info */}
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-0.5">
+                <span className="text-sm font-semibold text-zinc-900">{user.name}</span>
+                {portfolio?.clientType && (
+                  <span className="text-[10px] bg-zinc-100 text-zinc-600 px-2 py-0.5 rounded-md font-medium capitalize border border-zinc-200">
+                    {portfolio.clientType}
+                  </span>
+                )}
+              </div>
+              {portfolio?.bio
+                ? <p className="text-xs text-zinc-500 line-clamp-1">{portfolio.bio}</p>
+                : <p className="text-xs text-zinc-400 italic">No bio yet — complete your profile</p>
+              }
+              {/* Completion bar */}
+              <div className="flex items-center gap-2 mt-1.5">
+                <div className="flex-1 bg-zinc-100 rounded-full h-1 overflow-hidden">
+                  <div className="bg-zinc-900 h-1 rounded-full transition-all" style={{ width: `${calcCompletion('client', portfolio)}%` }} />
+                </div>
+                <span className="text-[10px] text-zinc-400 font-medium flex-shrink-0">{calcCompletion('client', portfolio)}% complete</span>
+              </div>
+            </div>
+            {/* Actions */}
+            <div className="flex gap-2 flex-shrink-0">
+              <Link to="/profile/setup" className="bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-medium px-3 py-1.5 rounded-lg transition-colors">
+                Edit Profile
+              </Link>
+            </div>
+          </div>
+        )}
 
         {/* Stats */}
         <div className="grid grid-cols-5 gap-3 mb-6">
