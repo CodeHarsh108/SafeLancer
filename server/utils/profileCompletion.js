@@ -2,6 +2,10 @@
  * Calculates profile completion percentage from the portfolio document.
  * Keep this in sync with the client-side calcCompletion in ProfileSetup.jsx.
  *
+ * Freelancer (100%):
+ *   base(20) + bio(20) + skills(20) + githubUrl(15) + linkedinUrl(5) +
+ *   portfolioUrl(5) + projectSamples(10) + resumeUrl(5)
+ *
  * Individual client (100%):
  *   base(20) + bio(15) + avatarUrl(15) + location(15) + yearsHiring(15) + linkedinUrl(10) + preferredComm(10)
  *
@@ -13,14 +17,13 @@
 function calcCompletion(role, data) {
   if (role === 'freelancer') {
     let pct = 20
-    if (data.bio) pct += 15
-    if (data.skills && data.skills.length > 0) pct += 15
-    if (data.hourlyRate) pct += 10
-    if (data.githubUrl) pct += 10
+    if (data.bio) pct += 20
+    if (data.skills && data.skills.length > 0) pct += 20
+    if (data.githubUrl) pct += 15
     if (data.linkedinUrl) pct += 5
     if (data.portfolioUrl) pct += 5
     if (data.projectSamples && data.projectSamples.length > 0) pct += 10
-    if (data.resumeUrl) pct += 10
+    if (data.resumeUrl) pct += 5
     return Math.min(100, pct)
   } else {
     if (data.clientType === 'individual') {

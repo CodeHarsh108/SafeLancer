@@ -1,11 +1,78 @@
 import { useState, useEffect } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams, Link } from 'react-router-dom'
 import api from '../api'
 import Navbar from '../components/Navbar'
 import toast, { Toaster } from 'react-hot-toast'
 import { computeBadges, BADGE_COLORS } from '../utils/badges'
 
 const FILE_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5001'
+
+// ── SVG icon set ─────────────────────────────────────────────────────────────
+const Icons = {
+  github: (
+    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+      <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z" />
+    </svg>
+  ),
+  linkedin: (
+    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+      <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z" />
+    </svg>
+  ),
+  globe: (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9" />
+    </svg>
+  ),
+  document: (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+    </svg>
+  ),
+  paperclip: (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+    </svg>
+  ),
+  shield: (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+    </svg>
+  ),
+  star: (
+    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+      <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+    </svg>
+  ),
+  download: (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3M3 17V7a2 2 0 012-2h6l2 2h4a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
+    </svg>
+  ),
+}
+
+function StatCard({ value, label, color = 'text-zinc-900' }) {
+  return (
+    <div className="bg-white rounded-xl border border-zinc-200 p-4 text-center">
+      <div className={`text-2xl font-bold ${color}`}>{value}</div>
+      <div className="text-zinc-500 text-xs mt-1">{label}</div>
+    </div>
+  )
+}
+
+function InfoRow({ icon, label, value }) {
+  return (
+    <div className="flex items-center gap-4 bg-white border border-zinc-200 rounded-xl px-4 py-3">
+      <div className="w-10 h-10 bg-zinc-900 rounded-xl flex items-center justify-center text-white flex-shrink-0">
+        {icon}
+      </div>
+      <div className="min-w-0">
+        <p className="text-xs text-zinc-400 mb-0.5">{label}</p>
+        <p className="text-sm font-semibold text-zinc-900 truncate">{value}</p>
+      </div>
+    </div>
+  )
+}
 
 export default function FreelancerProfile() {
   const { userId } = useParams()
@@ -50,7 +117,7 @@ export default function FreelancerProfile() {
   )
   if (!profile) return (
     <div className="min-h-screen bg-zinc-100"><Navbar />
-      <p className="text-center py-12 text-zinc-500">Profile not found</p>
+      <p className="text-center py-12 text-zinc-400 text-sm">Profile not found</p>
     </div>
   )
 
@@ -62,170 +129,195 @@ export default function FreelancerProfile() {
     ? (profile.avatarUrl.startsWith('http') ? profile.avatarUrl : `${FILE_BASE}${profile.avatarUrl}`)
     : null
 
+  const { earned: earnedBadges } = computeBadges('freelancer', profile.user, profile)
+
   const inputCls = "w-full border border-zinc-200 rounded-lg px-3 py-2.5 text-sm text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:border-zinc-400 transition-colors"
 
   return (
     <div className="min-h-screen bg-zinc-100">
       <Toaster />
       <Navbar />
-      <div className="max-w-4xl mx-auto p-6">
 
-        {/* Header */}
-        <div className="bg-white rounded-xl border border-zinc-200 p-6 mb-4">
-          <div className="flex items-start justify-between">
-            <div className="flex items-center gap-4">
+      {/* Cover */}
+      <div className="bg-zinc-900 h-36" />
+
+      <div className="max-w-4xl mx-auto px-6 pb-16">
+
+        {/* ── Hero card ── */}
+        <div className="bg-white rounded-xl border border-zinc-200 shadow-sm p-6 -mt-12 mb-4">
+          <div className="flex items-start justify-between gap-4 flex-wrap">
+            <div className="flex items-end gap-5">
+              {/* Avatar */}
               {avatarUrl
                 ? <img src={avatarUrl} alt={profile.user?.name}
-                    className="w-14 h-14 object-cover border border-zinc-200 rounded-full flex-shrink-0" />
-                : <div className="w-14 h-14 bg-zinc-900 rounded-full flex items-center justify-center text-white text-xl font-bold flex-shrink-0">
+                    className="w-20 h-20 rounded-xl object-cover border-4 border-white shadow-md -mt-14 flex-shrink-0" />
+                : <div className="w-20 h-20 rounded-xl bg-zinc-800 border-4 border-white shadow-md -mt-14 flex items-center justify-center text-white text-2xl font-bold flex-shrink-0 select-none">
                     {profile.user?.name?.[0]?.toUpperCase()}
                   </div>
               }
-              <div>
-                <h1 className="text-xl font-semibold text-zinc-900">{profile.user?.name}</h1>
-                <div className="flex items-center gap-3 mt-1 flex-wrap">
+              <div className="pb-0.5">
+                <h1 className="text-xl font-bold text-zinc-900">{profile.user?.name}</h1>
+                <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                   {avgRating && (
-                    <span className="text-amber-600 font-medium text-sm">★ {avgRating} <span className="text-zinc-400 font-normal text-xs">({ratings.length} reviews)</span></span>
+                    <span className="flex items-center gap-1 text-zinc-900 font-semibold text-sm">
+                      <svg className="w-3.5 h-3.5 fill-zinc-700" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" /></svg>
+                      {avgRating}
+                      <span className="text-zinc-400 font-normal text-xs">({ratings.length})</span>
+                    </span>
                   )}
                   {profile.user?.totalJobsCompleted > 0 && (
-                    <span className="text-zinc-400 text-xs">{profile.user.totalJobsCompleted} jobs</span>
+                    <span className="text-xs text-zinc-400">{profile.user.totalJobsCompleted} jobs completed</span>
                   )}
-                  <span className={`capitalize text-xs px-2 py-0.5 rounded-md font-medium ${
-                    profile.availability === 'full-time' ? 'bg-emerald-50 text-emerald-700'
-                    : profile.availability === 'part-time' ? 'bg-amber-50 text-amber-700'
-                    : 'bg-zinc-100 text-zinc-500'
-                  }`}>{profile.availability || 'full-time'}</span>
+                  <span className={`text-xs px-2.5 py-1 rounded-full font-medium border ${
+                    profile.availability === 'full-time'
+                      ? 'bg-zinc-100 text-zinc-700 border-zinc-200'
+                      : profile.availability === 'part-time'
+                      ? 'bg-zinc-100 text-zinc-700 border-zinc-200'
+                      : 'bg-zinc-100 text-zinc-500 border-zinc-200'
+                  }`}>
+                    {profile.availability === 'full-time' ? 'Available full-time'
+                      : profile.availability === 'part-time' ? 'Available part-time'
+                      : 'Not available'}
+                  </span>
                 </div>
-                {profile.hourlyRate > 0 && (
-                  <p className="text-zinc-500 text-sm mt-1">Rate: <strong className="text-zinc-700">₹{profile.hourlyRate}/hr</strong></p>
-                )}
               </div>
             </div>
+
+            {/* CTA — only for clients, never show edit here */}
             {me.role === 'client' && (
               <button onClick={() => setDemoModal(true)}
-                className="bg-zinc-900 hover:bg-zinc-800 text-white px-5 py-2.5 rounded-lg text-sm font-medium transition-colors">
+                className="bg-zinc-900 hover:bg-zinc-800 text-white px-5 py-2.5 rounded-xl text-sm font-medium transition-colors">
                 Request Demo
               </button>
             )}
           </div>
 
+          {/* Bio */}
           {profile.bio && (
-            <p className="text-zinc-600 mt-4 leading-relaxed text-sm border-t border-zinc-100 pt-4">{profile.bio}</p>
+            <p className="text-zinc-600 mt-5 text-sm leading-relaxed border-t border-zinc-100 pt-4">{profile.bio}</p>
           )}
 
-          <div className="flex flex-wrap gap-1.5 mt-4">
-            {profile.skills?.map(s => (
-              <span key={s} className="bg-zinc-100 text-zinc-600 px-2.5 py-1 rounded-md text-xs font-medium">{s}</span>
-            ))}
-          </div>
+          {/* Skills */}
+          {profile.skills?.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 mt-4">
+              {profile.skills.map(s => (
+                <span key={s} className="bg-zinc-100 text-zinc-700 px-2.5 py-1 rounded-lg text-xs font-medium border border-zinc-200">{s}</span>
+              ))}
+            </div>
+          )}
 
-          <div className="flex flex-wrap items-center gap-4 mt-4">
-            {profile.githubUrl && (
-              <a href={profile.githubUrl} target="_blank" rel="noreferrer"
-                className="inline-flex items-center gap-1.5 text-zinc-500 hover:text-zinc-900 text-sm transition-colors">
-                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
-                GitHub
-              </a>
-            )}
-            {profile.linkedinUrl && (
-              <a href={profile.linkedinUrl} target="_blank" rel="noreferrer"
-                className="inline-flex items-center gap-1.5 text-zinc-500 hover:text-zinc-900 text-sm transition-colors">
-                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
-                LinkedIn
-              </a>
-            )}
-            {profile.portfolioUrl && (
-              <a href={profile.portfolioUrl} target="_blank" rel="noreferrer"
-                className="inline-flex items-center gap-1.5 text-zinc-500 hover:text-zinc-900 text-sm transition-colors">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                </svg>
-                Portfolio
-              </a>
-            )}
+          {/* Links */}
+          {(profile.githubUrl || profile.linkedinUrl || profile.portfolioUrl) && (
+            <div className="flex flex-wrap items-center gap-3 mt-4 pt-4 border-t border-zinc-100">
+              {profile.githubUrl && (
+                <a href={profile.githubUrl} target="_blank" rel="noreferrer"
+                  className="inline-flex items-center gap-2 text-zinc-500 hover:text-zinc-900 text-sm font-medium transition-colors border border-zinc-200 hover:border-zinc-400 rounded-lg px-3 py-1.5">
+                  {Icons.github} GitHub
+                </a>
+              )}
+              {profile.linkedinUrl && (
+                <a href={profile.linkedinUrl} target="_blank" rel="noreferrer"
+                  className="inline-flex items-center gap-2 text-zinc-500 hover:text-zinc-900 text-sm font-medium transition-colors border border-zinc-200 hover:border-zinc-400 rounded-lg px-3 py-1.5">
+                  {Icons.linkedin} LinkedIn
+                </a>
+              )}
+              {profile.portfolioUrl && (
+                <a href={profile.portfolioUrl} target="_blank" rel="noreferrer"
+                  className="inline-flex items-center gap-2 text-zinc-500 hover:text-zinc-900 text-sm font-medium transition-colors border border-zinc-200 hover:border-zinc-400 rounded-lg px-3 py-1.5">
+                  {Icons.globe} Portfolio
+                </a>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* ── Stats ── */}
+        <div className="bg-white rounded-xl border border-zinc-200 mb-4">
+          <div className="grid grid-cols-4 divide-x divide-zinc-100">
+            {[
+              { value: avgRating ? `${avgRating}` : '—', label: 'Avg Rating', color: 'text-zinc-900' },
+              { value: profile.user?.totalJobsCompleted || 0, label: 'Jobs Done', color: 'text-zinc-900' },
+              { value: `${profile.user?.onTimeDeliveryRate?.toFixed(0) || 0}%`, label: 'On-time', color: 'text-zinc-900' },
+              { value: `${profile.user?.disputeRate?.toFixed(0) || 0}%`, label: 'Disputes', color: 'text-zinc-900' },
+            ].map(stat => (
+              <div key={stat.label} className="py-4 px-2 text-center">
+                <div className={`text-xl font-bold ${stat.color}`}>{stat.value}</div>
+                <div className="text-zinc-400 text-xs mt-0.5 leading-tight">{stat.label}</div>
+              </div>
+            ))}
           </div>
         </div>
 
-        {/* Stats */}
-        {(profile.user?.onTimeDeliveryRate > 0 || profile.user?.disputeRate >= 0) && (
-          <div className="grid grid-cols-3 gap-3 mb-4">
-            <div className="bg-white rounded-xl border border-zinc-200 p-4 text-center">
-              <div className="text-2xl font-bold text-emerald-600">{profile.user?.onTimeDeliveryRate?.toFixed(0) || 0}%</div>
-              <div className="text-zinc-500 text-xs mt-0.5">On-time Delivery</div>
+        {/* ── Badges ── */}
+        {earnedBadges.length > 0 && (
+          <div className="bg-white rounded-xl border border-zinc-200 p-5 mb-4">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-sm font-semibold text-zinc-800">Badges & Achievements</h2>
+              <span className="text-xs text-zinc-400">{earnedBadges.length} earned</span>
             </div>
-            <div className="bg-white rounded-xl border border-zinc-200 p-4 text-center">
-              <div className="text-2xl font-bold text-zinc-900">{profile.user?.totalJobsCompleted || 0}</div>
-              <div className="text-zinc-500 text-xs mt-0.5">Jobs Completed</div>
-            </div>
-            <div className="bg-white rounded-xl border border-zinc-200 p-4 text-center">
-              <div className="text-2xl font-bold text-red-500">{profile.user?.disputeRate?.toFixed(0) || 0}%</div>
-              <div className="text-zinc-500 text-xs mt-0.5">Dispute Rate</div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              {earnedBadges.map(badge => {
+                const c = BADGE_COLORS[badge.color]
+                return (
+                  <div key={badge.id}
+                    className={`flex items-center gap-3 border rounded-xl px-3 py-2.5 ${c.earned}`}>
+                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${c.icon}`}>
+                      {badge.icon}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold leading-tight">{badge.title}</p>
+                      <p className="text-xs opacity-70 mt-0.5 leading-snug">{badge.description}</p>
+                    </div>
+                  </div>
+                )
+              })}
             </div>
           </div>
         )}
 
-        {/* Badges */}
-        {(() => {
-          const { earned } = computeBadges('freelancer', profile.user, profile)
-          if (earned.length === 0) return null
-          return (
-            <div className="bg-white rounded-xl border border-zinc-200 p-5 mb-4">
-              <h2 className="text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-3">
-                Badges & Achievements
-                <span className="ml-2 text-zinc-300 font-normal normal-case tracking-normal">{earned.length} earned</span>
-              </h2>
-              <div className="flex flex-wrap gap-2">
-                {earned.map(badge => {
-                  const c = BADGE_COLORS[badge.color]
-                  return (
-                    <div key={badge.id} title={badge.description}
-                      className={`flex items-center gap-2 border rounded-xl px-3 py-2 ${c.earned}`}>
-                      <span className="text-sm">{badge.icon}</span>
-                      <span className="text-xs font-semibold whitespace-nowrap">{badge.title}</span>
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-          )
-        })()}
-
-        {/* Resume */}
+        {/* ── Resume ── */}
         {profile.resumeUrl && (
           <div className="bg-white rounded-xl border border-zinc-200 p-5 mb-4">
-            <h2 className="text-sm font-semibold uppercase tracking-wider text-zinc-400 mb-3">Resume</h2>
+            <h2 className="text-sm font-semibold text-zinc-800 mb-3">Resume</h2>
             <a href={`${FILE_BASE}${profile.resumeUrl}`} target="_blank" rel="noreferrer"
-              className="inline-flex items-center gap-2 border border-zinc-200 bg-white hover:bg-zinc-50 text-zinc-700 font-medium text-sm px-4 py-2 rounded-lg transition-colors">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3M3 17V7a2 2 0 012-2h6l2 2h4a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
-              </svg>
+              className="inline-flex items-center gap-2.5 border border-zinc-200 bg-zinc-50 hover:bg-zinc-100 text-zinc-700 font-medium text-sm px-4 py-2.5 rounded-xl transition-colors">
+              {Icons.download}
               Download Resume (PDF)
             </a>
           </div>
         )}
 
-        {/* Portfolio Samples */}
+        {/* ── Portfolio Samples ── */}
         {profile.projectSamples?.length > 0 && (
           <div className="bg-white rounded-xl border border-zinc-200 p-5 mb-4">
-            <h2 className="text-sm font-semibold uppercase tracking-wider text-zinc-400 mb-4">Portfolio Samples</h2>
-            <div className="space-y-2">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-sm font-semibold text-zinc-800">Portfolio Samples</h2>
+              <span className="text-xs text-zinc-400">{profile.projectSamples.length} project{profile.projectSamples.length !== 1 ? 's' : ''}</span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {profile.projectSamples.map((sample, i) => (
-                <div key={i} className="border border-zinc-100 rounded-lg p-4">
-                  <div className="flex items-start justify-between gap-4">
+                <div key={i} className="border border-zinc-100 rounded-xl p-4 hover:border-zinc-300 hover:bg-zinc-50 transition-all">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="w-9 h-9 bg-zinc-100 rounded-lg flex items-center justify-center text-zinc-500 flex-shrink-0">
+                      {Icons.paperclip}
+                    </div>
                     <div className="flex-1 min-w-0">
                       <h3 className="font-medium text-zinc-900 text-sm">{sample.title}</h3>
-                      {sample.description && <p className="text-sm text-zinc-500 mt-0.5">{sample.description}</p>}
+                      {sample.description && (
+                        <p className="text-xs text-zinc-500 mt-0.5 line-clamp-2">{sample.description}</p>
+                      )}
                       {sample.fileUrl && (
                         <a href={`${FILE_BASE}${sample.fileUrl}`} target="_blank" rel="noreferrer"
-                          className="inline-flex items-center gap-1 text-zinc-700 hover:text-zinc-900 text-xs mt-2 font-medium underline underline-offset-2">
+                          className="inline-flex items-center gap-1 text-zinc-600 hover:text-zinc-900 text-xs mt-2 font-medium underline underline-offset-2 transition-colors">
                           View / Download
                         </a>
                       )}
                     </div>
                     {sample.fileHash && (
                       <a href={`/verify/${sample.fileHash}`} target="_blank" rel="noreferrer"
-                        className="flex-shrink-0 text-xs bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-1 rounded-md hover:bg-emerald-100 transition-colors font-medium">
-                        SHA-256 ✓
+                        className="flex-shrink-0 inline-flex items-center gap-1 text-xs bg-zinc-100 text-zinc-700 border border-zinc-200 px-2 py-1 rounded-lg hover:bg-zinc-200 transition-colors font-medium">
+                        {Icons.shield}
+                        SHA-256
                       </a>
                     )}
                   </div>
@@ -235,60 +327,33 @@ export default function FreelancerProfile() {
           </div>
         )}
 
-        {/* Reviews */}
-        {ratings.length > 0 && (
-          <div className="bg-white rounded-xl border border-zinc-200 p-5">
-            <h2 className="text-sm font-semibold uppercase tracking-wider text-zinc-400 mb-4">Client Reviews</h2>
-            <div className="space-y-4">
-              {ratings.map(r => (
-                <div key={r._id} className="border-b border-zinc-100 pb-4 last:border-0 last:pb-0">
-                  <div className="flex items-center justify-between mb-1.5">
-                    <span className="font-medium text-zinc-700 text-sm">{r.ratedBy?.name}</span>
-                    <div className="flex items-center gap-0.5">
-                      {[1,2,3,4,5].map(star => (
-                        <span key={star} className={`text-sm ${star <= r.stars ? 'text-amber-400' : 'text-zinc-200'}`}>★</span>
-                      ))}
-                      <span className="text-zinc-400 text-xs ml-1">({r.stars}/5)</span>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-4 gap-2 text-xs text-zinc-400 mb-1.5">
-                    <span>Communication: {r.communication}/5</span>
-                    <span>Quality: {r.quality}/5</span>
-                    <span>Timeliness: {r.timeliness}/5</span>
-                    <span>Professional: {r.professionalism}/5</span>
-                  </div>
-                  {r.review && <p className="text-sm text-zinc-500 italic">"{r.review}"</p>}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
       </div>
 
-      {/* Demo Modal */}
+      {/* ── Demo Modal ── */}
       {demoModal && (
-        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl border border-zinc-200 shadow-xl p-6 w-full max-w-md">
             <h2 className="text-base font-semibold text-zinc-900 mb-1">Request Demo</h2>
-            <p className="text-sm text-zinc-500 mb-4">from {profile.user?.name}</p>
-            <div className="space-y-3">
+            <p className="text-sm text-zinc-400 mb-4">from {profile.user?.name}</p>
+            <div className="space-y-4">
               <div>
                 <label className="text-sm font-medium text-zinc-700 mb-1.5 block">What do you want to see?</label>
                 <textarea value={demoForm.message} onChange={e => setDemoForm({ ...demoForm, message: e.target.value })} rows={3}
-                  className={inputCls} placeholder="e.g. I want to see your React dashboard" />
+                  className={inputCls} placeholder="e.g. I want to see your React dashboard and how you handle state management" />
               </div>
               <div>
                 <label className="text-sm font-medium text-zinc-700 mb-1.5 block">Proposed Meeting Time</label>
-                <input type="datetime-local" value={demoForm.proposedAt} onChange={e => setDemoForm({ ...demoForm, proposedAt: e.target.value })}
+                <input type="datetime-local" value={demoForm.proposedAt}
+                  onChange={e => setDemoForm({ ...demoForm, proposedAt: e.target.value })}
                   className={inputCls} />
               </div>
               <div className="flex gap-2 pt-1">
                 <button onClick={sendDemoRequest}
-                  className="flex-1 bg-zinc-900 hover:bg-zinc-800 text-white font-medium py-2.5 rounded-lg text-sm transition-colors">
+                  className="flex-1 bg-zinc-900 hover:bg-zinc-800 text-white font-medium py-2.5 rounded-xl text-sm transition-colors">
                   Send Request
                 </button>
                 <button onClick={() => setDemoModal(false)}
-                  className="flex-1 border border-zinc-200 text-zinc-600 font-medium py-2.5 rounded-lg text-sm hover:bg-zinc-50 transition-colors">
+                  className="flex-1 border border-zinc-200 text-zinc-600 font-medium py-2.5 rounded-xl text-sm hover:bg-zinc-50 transition-colors">
                   Cancel
                 </button>
               </div>

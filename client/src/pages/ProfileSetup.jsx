@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 import api from '../api'
 import Navbar from '../components/Navbar'
 import SkillSelector from '../components/SkillSelector'
@@ -8,6 +8,7 @@ import {
   FREELANCER_BADGES, CLIENT_BADGES, BADGE_COLORS,
   computeBadges, storeBadgeSummary
 } from '../utils/badges'
+import { calcCompletion as calcCompletionUtil } from '../utils/profileCompletion'
 
 // Upload files are served by the Express server (port 5001), not Vite (5173).
 // All /uploads/... URLs must be prefixed with the backend base URL.
@@ -40,52 +41,53 @@ function isValidUrl(url) {
   try { new URL(url); return true } catch { return false }
 }
 
-// ─── Completion calculator (mirrors server/utils/profileCompletion.js) ────────
-function calcCompletion(role, p) {
-  if (!p) return 20
-  if (role === 'freelancer') {
-    let pct = 20
-    if (p.bio) pct += 15
-    if (p.skills && p.skills.length > 0) pct += 15
-    if (p.hourlyRate) pct += 10
-    if (p.githubUrl) pct += 10
-    if (p.linkedinUrl) pct += 5
-    if (p.portfolioUrl) pct += 5
-    if (p.projectSamples && p.projectSamples.length > 0) pct += 10
-    if (p.resumeUrl) pct += 10
-    return Math.min(100, pct)
-  } else {
-    if (p.clientType === 'individual') {
-      let pct = 20
-      if (p.bio) pct += 15
-      if (p.avatarUrl) pct += 15
-      if (p.location) pct += 15
-      if (p.yearsHiring) pct += 15
-      if (p.linkedinUrl) pct += 10
-      if (p.preferredComm) pct += 10
-      if (p.paymentVerified) pct += 10
-      return Math.min(100, pct)
-    } else if (p.clientType === 'business') {
-      let pct = 5
-      if (p.bio) pct += 10
-      if (p.avatarUrl) pct += 10
-      if (p.location) pct += 10
-      if (p.yearsHiring) pct += 10
-      if (p.companyName) pct += 10
-      if (p.industry) pct += 10
-      if (p.companySize) pct += 10
-      if (p.websiteUrl) pct += 5
-      if (p.linkedinUrl) pct += 5
-      if (p.preferredComm) pct += 5
-      if (p.paymentVerified) pct += 10
-      return Math.min(100, pct)
-    } else {
-      let pct = 20
-      if (p.bio) pct += 10
-      return Math.min(30, pct)
-    }
-  }
+// ─── SVG icon set (used in DetailRowCard) ────────────────────────────────────
+const SetupIcons = {
+  github: (
+    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+      <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z" />
+    </svg>
+  ),
+  linkedin: (
+    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+      <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z" />
+    </svg>
+  ),
+  globe: (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9" />
+    </svg>
+  ),
+  location: (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+    </svg>
+  ),
+  clock: (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+  ),
+  chat: (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+    </svg>
+  ),
+  users: (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+    </svg>
+  ),
+  paperclip: (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+    </svg>
+  ),
 }
+
+// Use shared completion calculator (single source of truth)
+const calcCompletion = calcCompletionUtil
 
 // ─── Shared helpers ───────────────────────────────────────────────────────────
 function Field({ label, hint, required, bonus, error, children }) {
@@ -116,8 +118,8 @@ function BadgesCard({ user, portfolio }) {
   const { earned, locked, total } = computeBadges(user?.role, user, portfolio)
 
   return (
-    <div className="bg-white rounded-xl border border-zinc-200 p-5">
-      <div className="flex items-center justify-between mb-4">
+    <div className="bg-white rounded-xl border border-zinc-200 p-4">
+      <div className="flex items-center justify-between mb-3">
         <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-400">Badges & Achievements</h3>
         <span className="text-xs text-zinc-400">{earned.length} / {total} earned</span>
       </div>
@@ -126,19 +128,19 @@ function BadgesCard({ user, portfolio }) {
         <p className="text-sm text-zinc-400 italic">Complete your profile to start earning badges.</p>
       )}
 
-      {/* Earned */}
+      {/* Earned — 2-col compact grid */}
       {earned.length > 0 && (
-        <div className="grid grid-cols-2 gap-2 mb-3">
+        <div className="grid grid-cols-2 gap-1.5 mb-2">
           {earned.map(badge => {
             const c = BADGE_COLORS[badge.color]
             return (
-              <div key={badge.id} className={`flex items-center gap-2.5 border rounded-xl px-3 py-2.5 ${c.earned}`}>
-                <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 text-base ${c.icon}`}>
+              <div key={badge.id} className={`flex items-start gap-2 border rounded-lg px-2.5 py-2 ${c.earned}`}>
+                <div className={`w-6 h-6 rounded-md flex items-center justify-center flex-shrink-0 mt-0.5 ${c.icon}`}>
                   {badge.icon}
                 </div>
                 <div className="min-w-0">
-                  <p className="text-xs font-semibold leading-tight truncate">{badge.title}</p>
-                  <p className="text-xs opacity-70 mt-0.5 leading-tight truncate">{badge.description}</p>
+                  <p className="text-[11px] font-semibold leading-tight truncate">{badge.title}</p>
+                  <p className="text-[10px] opacity-60 mt-0.5 leading-tight line-clamp-2">{badge.description}</p>
                 </div>
               </div>
             )
@@ -146,26 +148,26 @@ function BadgesCard({ user, portfolio }) {
         </div>
       )}
 
-      {/* Locked */}
+      {/* Divider */}
+      {earned.length > 0 && locked.length > 0 && (
+        <p className="text-[10px] text-zinc-400 font-semibold uppercase tracking-wider mb-1.5">Still to unlock</p>
+      )}
+
+      {/* Locked — 2-col compact grid */}
       {locked.length > 0 && (
-        <>
-          {earned.length > 0 && (
-            <p className="text-xs text-zinc-400 font-medium mb-2 mt-1">Still to unlock</p>
-          )}
-          <div className="grid grid-cols-2 gap-2">
-            {locked.map(badge => (
-              <div key={badge.id} className="flex items-center gap-2.5 border border-zinc-100 rounded-xl px-3 py-2.5 bg-zinc-50 opacity-60">
-                <div className="w-8 h-8 rounded-lg bg-zinc-200 flex items-center justify-center flex-shrink-0 text-base grayscale">
-                  {badge.icon}
-                </div>
-                <div className="min-w-0">
-                  <p className="text-xs font-semibold text-zinc-500 leading-tight truncate">{badge.title}</p>
-                  <p className="text-xs text-zinc-400 mt-0.5 leading-tight truncate">{badge.description}</p>
-                </div>
+        <div className="grid grid-cols-2 gap-1.5">
+          {locked.map(badge => (
+            <div key={badge.id} className="flex items-start gap-2 border border-zinc-100 rounded-lg px-2.5 py-2 bg-zinc-50 opacity-50">
+              <div className="w-6 h-6 rounded-md bg-zinc-200 text-zinc-400 flex items-center justify-center flex-shrink-0 mt-0.5">
+                {badge.icon}
               </div>
-            ))}
-          </div>
-        </>
+              <div className="min-w-0">
+                <p className="text-[11px] font-semibold text-zinc-500 leading-tight truncate">{badge.title}</p>
+                <p className="text-[10px] text-zinc-400 mt-0.5 leading-tight line-clamp-2">{badge.description}</p>
+              </div>
+            </div>
+          ))}
+        </div>
       )}
     </div>
   )
@@ -276,9 +278,9 @@ function PaymentVerifyModal({ onClose, onVerified }) {
                 Back
               </button>
 
-              <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 flex gap-3">
+              <div className="bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 flex gap-3">
                 <span className="text-base mt-0.5">ℹ️</span>
-                <p className="text-xs text-amber-800 leading-relaxed">
+                <p className="text-xs text-zinc-600 leading-relaxed">
                   A ₹1 refundable charge will be placed on your payment method to confirm it is valid. The amount is refunded within seconds.
                 </p>
               </div>
@@ -335,8 +337,8 @@ function PaymentVerifyModal({ onClose, onVerified }) {
           {/* Step: success */}
           {step === 'success' && (
             <div className="py-6 text-center space-y-4">
-              <div className="w-16 h-16 bg-emerald-50 rounded-full flex items-center justify-center mx-auto">
-                <svg className="w-8 h-8 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="w-16 h-16 bg-zinc-100 rounded-full flex items-center justify-center mx-auto">
+                <svg className="w-8 h-8 text-zinc-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
                 </svg>
               </div>
@@ -351,7 +353,7 @@ function PaymentVerifyModal({ onClose, onVerified }) {
                   'Faster contract creation',
                 ].map(item => (
                   <div key={item} className="flex items-center gap-2">
-                    <svg className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-3.5 h-3.5 text-zinc-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
                     </svg>
                     <span className="text-xs text-zinc-600">{item}</span>
@@ -371,255 +373,410 @@ function PaymentVerifyModal({ onClose, onVerified }) {
 }
 
 // ─── Avatar display ───────────────────────────────────────────────────────────
-function Avatar({ url, name, size = 14, shape = 'circle' }) {
+function Avatar({ url, name, size = 14, shape = 'circle', className = '' }) {
   const sizeClass = `w-${size} h-${size}`
   const shapeClass = shape === 'circle' ? 'rounded-full' : 'rounded-xl'
-  // url is a relative path like /uploads/... served by Express — must prefix with FILE_BASE
+  // Only add default border when no custom className is passed
+  const borderClass = className ? '' : 'border border-zinc-200'
   const fullUrl = url ? (url.startsWith('http') ? url : `${FILE_BASE}${url}`) : null
   if (fullUrl) {
     return (
       <img src={fullUrl} alt={name}
-        className={`${sizeClass} ${shapeClass} object-cover border border-zinc-200`} />
+        className={`${sizeClass} ${shapeClass} object-cover ${borderClass} ${className}`} />
     )
   }
   return (
-    <div className={`${sizeClass} ${shapeClass} bg-zinc-900 flex items-center justify-center text-white font-bold flex-shrink-0`}
+    <div className={`${sizeClass} ${shapeClass} bg-zinc-900 flex items-center justify-center text-white font-bold flex-shrink-0 ${borderClass} ${className}`}
       style={{ fontSize: size > 10 ? '1.25rem' : '0.875rem' }}>
       {name?.[0]?.toUpperCase()}
     </div>
   )
 }
 
+// ─── Checklist helper ────────────────────────────────────────────────────────
+function getChecklistItems(role, portfolio) {
+  const clientType = portfolio?.clientType
+  if (role === 'freelancer') {
+    return [
+      { label: 'Bio', done: !!portfolio?.bio, pct: 20 },
+      { label: 'Skills', done: (portfolio?.skills?.length || 0) > 0, pct: 20 },
+      { label: 'GitHub URL', done: !!portfolio?.githubUrl, pct: 15 },
+      { label: 'Portfolio Sample', done: (portfolio?.projectSamples?.length || 0) > 0, pct: 10 },
+      { label: 'LinkedIn URL', done: !!portfolio?.linkedinUrl, pct: 5 },
+      { label: 'Portfolio Website', done: !!portfolio?.portfolioUrl, pct: 5 },
+      { label: 'Resume', done: !!portfolio?.resumeUrl, pct: 5 },
+    ]
+  } else if (clientType === 'individual') {
+    return [
+      { label: 'Bio', done: !!portfolio?.bio, pct: 15 },
+      { label: 'Profile Photo', done: !!portfolio?.avatarUrl, pct: 15 },
+      { label: 'Location', done: !!portfolio?.location, pct: 15 },
+      { label: 'Hiring Experience', done: !!portfolio?.yearsHiring, pct: 15 },
+      { label: 'LinkedIn URL', done: !!portfolio?.linkedinUrl, pct: 10 },
+      { label: 'Communication Style', done: !!portfolio?.preferredComm, pct: 10 },
+      { label: 'Payment Verified', done: !!portfolio?.paymentVerified, pct: 10 },
+    ]
+  } else if (clientType === 'business') {
+    return [
+      { label: 'Bio', done: !!portfolio?.bio, pct: 10 },
+      { label: 'Company Logo', done: !!portfolio?.avatarUrl, pct: 10 },
+      { label: 'Location', done: !!portfolio?.location, pct: 10 },
+      { label: 'Company Name', done: !!portfolio?.companyName, pct: 10 },
+      { label: 'Industry', done: !!portfolio?.industry, pct: 10 },
+      { label: 'Company Size', done: !!portfolio?.companySize, pct: 10 },
+      { label: 'Hiring Experience', done: !!portfolio?.yearsHiring, pct: 10 },
+      { label: 'Payment Verified', done: !!portfolio?.paymentVerified, pct: 10 },
+      { label: 'Website URL', done: !!portfolio?.websiteUrl, pct: 5 },
+      { label: 'LinkedIn URL', done: !!portfolio?.linkedinUrl, pct: 5 },
+      { label: 'Communication Style', done: !!portfolio?.preferredComm, pct: 5 },
+    ]
+  }
+  return [
+    { label: 'Choose client type', done: false, pct: 0 },
+  ]
+}
+
 // ─── Profile Card (view mode) ─────────────────────────────────────────────────
 function ProfileCard({ portfolio, user, fullUser, completion, onEdit, onCompletionChange }) {
   const isFreelancer = user?.role === 'freelancer'
-  const completionColor = completion < 40 ? 'bg-red-500' : completion < 70 ? 'bg-amber-500' : completion < 100 ? 'bg-blue-500' : 'bg-emerald-500'
-  const completionText = completion < 40 ? 'text-red-600' : completion < 70 ? 'text-amber-600' : completion < 100 ? 'text-blue-600' : 'text-emerald-600'
   const isIndividual = portfolio?.clientType === 'individual'
   const isBusiness = portfolio?.clientType === 'business'
   const avatarShape = isBusiness ? 'square' : 'circle'
   const [showVerifyModal, setShowVerifyModal] = useState(false)
   const [isVerified, setIsVerified] = useState(portfolio?.paymentVerified || false)
 
-  const handleVerified = (newPct) => {
+  const completionColor = 'bg-zinc-900'
+  const completionTextColor = 'text-zinc-900'
+
+  const checklist = getChecklistItems(user?.role, portfolio)
+  const doneCount = checklist.filter(i => i.done).length
+  const missing = checklist.filter(i => !i.done)
+
+  const coverBg = 'bg-zinc-900'
+  const publicProfilePath = isFreelancer
+    ? `/freelancers/${user?.id}`
+    : `/clients/${user?.id}`
+
+  const handleVerified = () => {
     setIsVerified(true)
     setShowVerifyModal(false)
-    if (newPct) onCompletionChange?.(newPct)
-    localStorage.setItem('profileCompletion', String(newPct || completion))
+    const pct = calcCompletion(user?.role, { ...portfolio, paymentVerified: true })
+    onCompletionChange?.(pct)
+    localStorage.setItem('profileCompletion', String(pct))
     window.dispatchEvent(new Event('profileUpdated'))
     toast.success('Payment method verified!')
   }
 
   return (
-    <div className="space-y-4">
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
       {showVerifyModal && (
         <PaymentVerifyModal onClose={() => setShowVerifyModal(false)} onVerified={handleVerified} />
       )}
-      {/* Header */}
-      <div className="bg-white rounded-xl border border-zinc-200 p-6">
-        <div className="flex items-start justify-between">
-          <div className="flex items-center gap-4">
-            <Avatar url={portfolio?.avatarUrl} name={user?.name} size={14} shape={avatarShape} />
-            <div>
-              <h2 className="text-lg font-semibold text-zinc-900">{user?.name}</h2>
-              {isBusiness && portfolio?.companyName && (
-                <p className="text-sm text-zinc-500">{portfolio.companyName}</p>
-              )}
-              <div className="flex items-center gap-2 mt-1 flex-wrap">
-                {isFreelancer ? (
-                  <>
-                    <span className="text-xs bg-zinc-100 text-zinc-600 px-2 py-0.5 rounded-md font-medium capitalize">
-                      {user?.role}
-                    </span>
-                    {portfolio?.availability && (
-                      <span className={`text-xs px-2 py-0.5 rounded-md font-medium ${
-                        portfolio.availability === 'full-time' ? 'bg-emerald-50 text-emerald-700' :
-                        portfolio.availability === 'part-time' ? 'bg-amber-50 text-amber-700' :
-                        'bg-zinc-100 text-zinc-500'
-                      }`}>{portfolio.availability}</span>
-                    )}
-                    {portfolio?.hourlyRate > 0 && (
-                      <span className="text-sm font-medium text-zinc-700">₹{portfolio.hourlyRate}/hr</span>
-                    )}
-                  </>
-                ) : (
-                  <>
-                    {portfolio?.clientType && (
-                      <span className={`text-xs px-2 py-0.5 rounded-md font-medium ${
-                        isIndividual ? 'bg-violet-50 text-violet-700' : 'bg-blue-50 text-blue-700'
-                      }`}>
-                        {isIndividual ? 'Individual' : 'Business'}
-                      </span>
-                    )}
-                    {isBusiness && portfolio?.industry && (
-                      <span className="text-xs bg-zinc-100 text-zinc-600 px-2 py-0.5 rounded-md font-medium">
-                        {portfolio.industry}
-                      </span>
-                    )}
-                    {isVerified && (
-                      <span className="text-xs bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-md font-medium flex items-center gap-1">
-                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-                        </svg>
-                        Payment Verified
-                      </span>
-                    )}
-                  </>
-                )}
+
+      {/* ── LEFT ────────────────────────────────────────────────── */}
+      <div className="lg:col-span-2 space-y-3">
+
+        {/* Cover + Header card */}
+        <div className="bg-white rounded-xl border border-zinc-200 overflow-hidden">
+          <div className={`h-28 ${coverBg}`} />
+          <div className="px-5 pb-5">
+            <div className="flex items-start justify-between -mt-8 mb-2">
+              <Avatar url={portfolio?.avatarUrl} name={user?.name} size={16} shape={avatarShape}
+                className="border-4 border-white shadow" />
+              <div className="flex gap-2 mt-9">
+                <button onClick={onEdit}
+                  className="bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-medium px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5">
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536M9 13l6.586-6.586a2 2 0 112.828 2.828L11.828 15.828a2 2 0 01-1.414.586H9v-2a2 2 0 01.586-1.414z" />
+                  </svg>
+                  Edit Profile
+                </button>
+                <Link to={publicProfilePath}
+                  className="border border-zinc-200 bg-white hover:bg-zinc-50 text-zinc-500 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5">
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                  </svg>
+                  Public view
+                </Link>
               </div>
             </div>
-          </div>
-          <button onClick={onEdit}
-            className="border border-zinc-200 bg-white hover:bg-zinc-50 text-zinc-700 text-sm font-medium px-4 py-2 rounded-lg transition-colors flex items-center gap-1.5">
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536M9 13l6.586-6.586a2 2 0 112.828 2.828L11.828 15.828a2 2 0 01-1.414.586H9v-2a2 2 0 01.586-1.414z" />
-            </svg>
-            Edit
-          </button>
-        </div>
-        {portfolio?.bio
-          ? <p className="mt-4 text-zinc-600 text-sm leading-relaxed border-t border-zinc-100 pt-4">{portfolio.bio}</p>
-          : <p className="mt-4 text-zinc-400 text-sm italic border-t border-zinc-100 pt-4">No bio added yet.</p>
-        }
-      </div>
 
-      {/* Skills (freelancer) */}
-      {isFreelancer && (
-        <div className="bg-white rounded-xl border border-zinc-200 p-5">
-          <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-3">Skills</h3>
-          {portfolio?.skills?.length > 0
-            ? <div className="flex flex-wrap gap-1.5">
-                {portfolio.skills.map(skill => (
-                  <span key={skill} className="bg-zinc-100 text-zinc-700 text-xs font-medium px-2.5 py-1 rounded-md">{skill}</span>
-                ))}
-              </div>
-            : <p className="text-zinc-400 text-sm italic">No skills added yet.</p>
-          }
-        </div>
-      )}
-
-      {/* Details */}
-      <div className="bg-white rounded-xl border border-zinc-200 p-5">
-        <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-4">Details</h3>
-        <div className="space-y-3">
-          {/* Freelancer details */}
-          {isFreelancer && portfolio?.githubUrl && (
-            <DetailRow icon="💻" label="GitHub">
-              <a href={portfolio.githubUrl} target="_blank" rel="noopener noreferrer"
-                className="text-sm text-zinc-700 hover:underline underline-offset-2 font-medium break-all">{portfolio.githubUrl}</a>
-            </DetailRow>
-          )}
-          {portfolio?.linkedinUrl && (
-            <DetailRow icon="🔗" label="LinkedIn">
-              <a href={portfolio.linkedinUrl} target="_blank" rel="noopener noreferrer"
-                className="text-sm text-zinc-700 hover:underline underline-offset-2 font-medium break-all">{portfolio.linkedinUrl}</a>
-            </DetailRow>
-          )}
-          {isFreelancer && portfolio?.portfolioUrl && (
-            <DetailRow icon="🌐" label="Portfolio">
-              <a href={portfolio.portfolioUrl} target="_blank" rel="noopener noreferrer"
-                className="text-sm text-zinc-700 hover:underline underline-offset-2 font-medium break-all">{portfolio.portfolioUrl}</a>
-            </DetailRow>
-          )}
-          {isFreelancer && portfolio?.resumeUrl && (
-            <DetailRow icon="📄" label="Resume">
-              <span className="text-sm text-emerald-600 font-medium">Uploaded</span>
-            </DetailRow>
-          )}
-          {isFreelancer && portfolio?.projectSamples?.length > 0 && (
-            <DetailRow icon="📎" label="Portfolio Samples">
-              <span className="text-sm text-zinc-700 font-medium">{portfolio.projectSamples.length} sample{portfolio.projectSamples.length > 1 ? 's' : ''}</span>
-            </DetailRow>
-          )}
-
-          {/* Client details */}
-          {!isFreelancer && isBusiness && portfolio?.companySize && (
-            <DetailRow icon="👥" label="Company Size">
-              <span className="text-sm text-zinc-700 font-medium">{portfolio.companySize} people</span>
-            </DetailRow>
-          )}
-          {!isFreelancer && isBusiness && portfolio?.websiteUrl && (
-            <DetailRow icon="🌐" label="Website">
-              <a href={portfolio.websiteUrl} target="_blank" rel="noopener noreferrer"
-                className="text-sm text-zinc-700 hover:underline underline-offset-2 font-medium break-all">{portfolio.websiteUrl}</a>
-            </DetailRow>
-          )}
-          {!isFreelancer && portfolio?.location && (
-            <DetailRow icon="📍" label="Location">
-              <span className="text-sm text-zinc-700 font-medium">{portfolio.location}</span>
-            </DetailRow>
-          )}
-          {!isFreelancer && portfolio?.yearsHiring && (
-            <DetailRow icon="🕐" label="Hiring Experience">
-              <span className="text-sm text-zinc-700 font-medium">
-                {YEARS_HIRING_OPTIONS.find(o => o.value === portfolio.yearsHiring)?.label || portfolio.yearsHiring}
-              </span>
-            </DetailRow>
-          )}
-          {!isFreelancer && portfolio?.preferredComm && (
-            <DetailRow icon="💬" label="Communication">
-              <span className="text-sm text-zinc-700 font-medium capitalize">{portfolio.preferredComm}</span>
-            </DetailRow>
-          )}
-
-          {/* Empty state */}
-          {!portfolio?.linkedinUrl && !portfolio?.githubUrl && !portfolio?.location &&
-           !portfolio?.companyName && !portfolio?.websiteUrl && (
-            <p className="text-zinc-400 text-sm italic">No details added yet.</p>
-          )}
-        </div>
-      </div>
-
-      {/* Payment Verification — clients only, always visible in view mode */}
-      {!isFreelancer && (
-        <div className={`rounded-xl border p-5 ${isVerified ? 'bg-emerald-50 border-emerald-200' : 'bg-white border-zinc-200'}`}>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${isVerified ? 'bg-emerald-100' : 'bg-zinc-100'}`}>
-                <svg className={`w-5 h-5 ${isVerified ? 'text-emerald-600' : 'text-zinc-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-                </svg>
-              </div>
-              <div>
-                <p className={`text-sm font-semibold ${isVerified ? 'text-emerald-800' : 'text-zinc-800'}`}>
-                  {isVerified ? 'Payment Verified' : 'Payment Not Verified'}
-                </p>
-                <p className={`text-xs mt-0.5 ${isVerified ? 'text-emerald-600' : 'text-zinc-400'}`}>
-                  {isVerified
-                    ? 'Freelancers can see your payment method is valid'
-                    : 'Verify to get better quality bids · +10%'}
-                </p>
-              </div>
-            </div>
-            {!isVerified && (
-              <button onClick={() => setShowVerifyModal(true)}
-                className="text-sm bg-zinc-900 hover:bg-zinc-800 text-white font-medium px-4 py-2 rounded-lg transition-colors flex-shrink-0">
-                Verify now
-              </button>
+            <h2 className="text-base font-bold text-zinc-900 leading-tight mt-1">{user?.name}</h2>
+            {isBusiness && portfolio?.companyName && (
+              <p className="text-sm text-zinc-500 mt-0.5">{portfolio.companyName}</p>
             )}
+
+            {/* Tags */}
+            <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+              {isFreelancer ? (
+                <>
+                  {fullUser?.rating > 0 && (
+                    <span className="text-zinc-900 font-semibold text-sm">★ {fullUser.rating.toFixed(1)}</span>
+                  )}
+                  {fullUser?.totalJobsCompleted > 0 && (
+                    <span className="text-xs text-zinc-400">{fullUser.totalJobsCompleted} jobs</span>
+                  )}
+                  {portfolio?.availability && (
+                    <span className={`text-xs px-2.5 py-1 rounded-full font-medium border ${
+                      portfolio.availability === 'full-time' ? 'bg-zinc-100 text-zinc-700 border-zinc-200' :
+                      portfolio.availability === 'part-time' ? 'bg-zinc-100 text-zinc-700 border-zinc-200' :
+                      'bg-zinc-100 text-zinc-500 border-zinc-200'
+                    }`}>{portfolio.availability}</span>
+                  )}
+                </>
+              ) : (
+                <>
+                  {portfolio?.clientType && (
+                    <span className={`text-xs px-2.5 py-1 rounded-full font-medium border ${
+                      isIndividual ? 'bg-zinc-100 text-zinc-700 border-zinc-200' : 'bg-zinc-100 text-zinc-700 border-zinc-200'
+                    }`}>
+                      {isIndividual ? 'Individual' : 'Business'}
+                    </span>
+                  )}
+                  {isBusiness && portfolio?.industry && (
+                    <span className="text-xs bg-zinc-100 text-zinc-600 px-2 py-0.5 rounded-md font-medium border border-zinc-200">
+                      {portfolio.industry}
+                    </span>
+                  )}
+                  {isVerified && (
+                    <span className="text-xs bg-zinc-100 text-zinc-700 border border-zinc-200 px-2.5 py-1 rounded-full font-medium flex items-center gap-1">
+                      <svg className="w-3 h-3 text-zinc-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                      </svg>
+                      Payment Verified
+                    </span>
+                  )}
+                </>
+              )}
+            </div>
+
+            {/* Bio */}
+            {portfolio?.bio
+              ? <p className="mt-2 text-zinc-600 text-sm leading-relaxed">{portfolio.bio}</p>
+              : <p className="mt-2 text-zinc-400 text-xs italic">No bio yet. <button onClick={onEdit} className="text-zinc-600 underline underline-offset-2">Add one →</button></p>
+            }
           </div>
         </div>
-      )}
 
-      {/* Badges */}
-      <BadgesCard user={fullUser || user} portfolio={portfolio} />
-
-      {/* Completion */}
-      <div className="bg-white rounded-xl border border-zinc-200 p-5">
-        <div className="flex items-center justify-between mb-2">
-          <h3 className="text-sm font-medium text-zinc-700">Profile Completion</h3>
-          <span className={`text-lg font-bold ${completionText}`}>{completion}%</span>
-        </div>
-        <div className="w-full bg-zinc-100 rounded-full h-1.5 overflow-hidden">
-          <div className={`h-1.5 rounded-full transition-all duration-500 ${completionColor}`} style={{ width: `${completion}%` }} />
-        </div>
-        {completion < 100 && (
-          <p className="text-xs text-zinc-400 mt-2">
-            {completion < 40 ? 'Add more details to make your profile visible to others.' :
-             completion < 70 ? 'A few more details will make your profile stand out.' :
-             'Almost there — one last push to reach 100%!'}
-          </p>
+        {/* Stats row — freelancer */}
+        {isFreelancer && fullUser && (
+          <div className="bg-white rounded-xl border border-zinc-200">
+            <div className="grid grid-cols-4 divide-x divide-zinc-100">
+              {[
+                { value: fullUser.rating > 0 ? fullUser.rating.toFixed(1) : '—', label: 'Avg Rating', color: 'text-zinc-900' },
+                { value: fullUser.totalJobsCompleted || 0, label: 'Jobs Done', color: 'text-zinc-900' },
+                { value: `${fullUser.onTimeDeliveryRate?.toFixed(0) || 0}%`, label: 'On-time', color: 'text-zinc-900' },
+                { value: `${fullUser.disputeRate?.toFixed(0) || 0}%`, label: 'Disputes', color: 'text-zinc-900' },
+              ].map(stat => (
+                <div key={stat.label} className="py-3 px-2 text-center">
+                  <div className={`text-xl font-bold ${stat.color}`}>{stat.value}</div>
+                  <div className="text-zinc-400 text-xs mt-0.5">{stat.label}</div>
+                </div>
+              ))}
+            </div>
+          </div>
         )}
+
+        {/* Skills — freelancer */}
+        {isFreelancer && (
+          <div className="bg-white rounded-xl border border-zinc-200 p-4">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-2.5">Skills</h3>
+            {portfolio?.skills?.length > 0
+              ? <div className="flex flex-wrap gap-1.5">
+                  {portfolio.skills.map(skill => (
+                    <span key={skill} className="bg-zinc-100 text-zinc-700 text-xs font-medium px-2.5 py-1 rounded-md">{skill}</span>
+                  ))}
+                </div>
+              : <button onClick={onEdit} className="text-xs text-zinc-400 italic hover:text-zinc-700 transition-colors">No skills added yet. Add some →</button>
+            }
+          </div>
+        )}
+
+        {/* Details */}
+        {(portfolio?.githubUrl || portfolio?.linkedinUrl || portfolio?.portfolioUrl ||
+          portfolio?.location || portfolio?.websiteUrl || portfolio?.yearsHiring) && (
+          <div className="bg-white rounded-xl border border-zinc-200 p-4">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-3">Details</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {portfolio?.githubUrl && (
+                <DetailRowCard icon={SetupIcons.github} label="GitHub">
+                  <a href={portfolio.githubUrl} target="_blank" rel="noopener noreferrer"
+                    className="text-xs text-zinc-700 hover:underline underline-offset-2 font-medium truncate block">{portfolio.githubUrl}</a>
+                </DetailRowCard>
+              )}
+              {portfolio?.linkedinUrl && (
+                <DetailRowCard icon={SetupIcons.linkedin} label="LinkedIn">
+                  <a href={portfolio.linkedinUrl} target="_blank" rel="noopener noreferrer"
+                    className="text-xs text-zinc-700 hover:underline underline-offset-2 font-medium truncate block">{portfolio.linkedinUrl}</a>
+                </DetailRowCard>
+              )}
+              {portfolio?.portfolioUrl && (
+                <DetailRowCard icon={SetupIcons.globe} label="Portfolio">
+                  <a href={portfolio.portfolioUrl} target="_blank" rel="noopener noreferrer"
+                    className="text-xs text-zinc-700 hover:underline underline-offset-2 font-medium truncate block">{portfolio.portfolioUrl}</a>
+                </DetailRowCard>
+              )}
+              {portfolio?.location && (
+                <DetailRowCard icon={SetupIcons.location} label="Location">
+                  <span className="text-xs text-zinc-700 font-medium">{portfolio.location}</span>
+                </DetailRowCard>
+              )}
+              {portfolio?.yearsHiring && (
+                <DetailRowCard icon={SetupIcons.clock} label="Hiring Experience">
+                  <span className="text-xs text-zinc-700 font-medium">
+                    {YEARS_HIRING_OPTIONS.find(o => o.value === portfolio.yearsHiring)?.label || portfolio.yearsHiring}
+                  </span>
+                </DetailRowCard>
+              )}
+              {portfolio?.preferredComm && (
+                <DetailRowCard icon={SetupIcons.chat} label="Communication">
+                  <span className="text-xs text-zinc-700 font-medium capitalize">{portfolio.preferredComm}</span>
+                </DetailRowCard>
+              )}
+              {isBusiness && portfolio?.companySize && (
+                <DetailRowCard icon={SetupIcons.users} label="Company Size">
+                  <span className="text-xs text-zinc-700 font-medium">{portfolio.companySize} people</span>
+                </DetailRowCard>
+              )}
+              {isBusiness && portfolio?.websiteUrl && (
+                <DetailRowCard icon={SetupIcons.globe} label="Website">
+                  <a href={portfolio.websiteUrl} target="_blank" rel="noopener noreferrer"
+                    className="text-xs text-zinc-700 hover:underline underline-offset-2 font-medium truncate block">{portfolio.websiteUrl}</a>
+                </DetailRowCard>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Portfolio Samples — freelancer */}
+        {isFreelancer && portfolio?.projectSamples?.length > 0 && (
+          <div className="bg-white rounded-xl border border-zinc-200 p-4">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-400">Portfolio Samples</h3>
+              <span className="text-xs text-zinc-400">{portfolio.projectSamples.length} uploaded</span>
+            </div>
+            <div className="space-y-1.5">
+              {portfolio.projectSamples.map((s, i) => (
+                <div key={i} className="flex items-center gap-2.5 border border-zinc-100 rounded-lg px-3 py-2 bg-zinc-50">
+                  <div className="w-7 h-7 bg-white border border-zinc-200 rounded-md flex items-center justify-center flex-shrink-0 text-zinc-500">{SetupIcons.paperclip}</div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-medium text-zinc-800 truncate">{s.title}</p>
+                    <p className="text-[10px] text-zinc-400 font-mono mt-0.5 truncate">{s.fileHash?.slice(0, 24)}…</p>
+                  </div>
+                  {s.fileHash && (
+                    <span className="text-[10px] bg-zinc-100 text-zinc-700 border border-zinc-200 px-1.5 py-0.5 rounded font-medium flex-shrink-0 whitespace-nowrap">
+                      SHA-256 ✓
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Resume — freelancer */}
+        {isFreelancer && portfolio?.resumeUrl && (
+          <div className="bg-white rounded-xl border border-zinc-200 p-4">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-2.5">Resume</h3>
+            <a href={`${FILE_BASE}${portfolio.resumeUrl}`} target="_blank" rel="noreferrer"
+              className="inline-flex items-center gap-2 border border-zinc-200 bg-zinc-50 hover:bg-zinc-100 text-zinc-700 text-xs font-medium px-3 py-2 rounded-lg transition-colors">
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3M3 17V7a2 2 0 012-2h6l2 2h4a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
+              </svg>
+              Download Resume (PDF)
+            </a>
+          </div>
+        )}
+
+        {/* Payment Verification — clients only */}
+        {!isFreelancer && (
+          <div className={`rounded-xl border p-4 ${isVerified ? 'bg-zinc-50 border-zinc-200' : 'bg-white border-zinc-200'}`}>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${isVerified ? 'bg-zinc-100' : 'bg-zinc-100'}`}>
+                  <svg className={`w-5 h-5 ${isVerified ? 'text-zinc-600' : 'text-zinc-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                  </svg>
+                </div>
+                <div>
+                  <p className={`text-sm font-semibold ${isVerified ? 'text-zinc-800' : 'text-zinc-800'}`}>
+                    {isVerified ? 'Payment Verified' : 'Payment Not Verified'}
+                  </p>
+                  <p className={`text-xs mt-0.5 ${isVerified ? 'text-zinc-500' : 'text-zinc-400'}`}>
+                    {isVerified ? 'Freelancers can see your payment method is valid' : 'Verify to unlock posting jobs · required for 100%'}
+                  </p>
+                </div>
+              </div>
+              {!isVerified && (
+                <button onClick={() => setShowVerifyModal(true)}
+                  className="text-sm bg-zinc-900 hover:bg-zinc-800 text-white font-medium px-4 py-2 rounded-lg transition-colors flex-shrink-0">
+                  Verify now
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ── RIGHT: Sidebar ──────────────────────────────────────────── */}
+      <div className="lg:col-span-1 space-y-3">
+
+        {/* Profile Strength */}
+        <div className="bg-white rounded-xl border border-zinc-200 p-4">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-sm font-semibold text-zinc-800">Profile Strength</h3>
+            <span className={`text-sm font-bold ${completionTextColor}`}>{completion}%</span>
+          </div>
+          <div className="w-full bg-zinc-100 rounded-full h-1.5 overflow-hidden mb-3">
+            <div className={`h-1.5 rounded-full transition-all duration-700 ${completionColor}`} style={{ width: `${completion}%` }} />
+          </div>
+
+          {completion === 100 ? (
+            <div className="flex items-center gap-2 bg-zinc-50 border border-zinc-200 rounded-lg px-3 py-2">
+              <svg className="w-3.5 h-3.5 text-zinc-700 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+              </svg>
+              <span className="text-xs font-semibold text-zinc-700">Profile complete — you're ready to go!</span>
+            </div>
+          ) : (
+            <div className="space-y-1">
+              <p className="text-[10px] text-zinc-400 font-medium mb-1.5 uppercase tracking-wide">
+                {missing.length} item{missing.length !== 1 ? 's' : ''} left
+              </p>
+              {checklist.map(item => (
+                <div key={item.label} className="flex items-center gap-2">
+                  {item.done ? (
+                    <div className="w-3.5 h-3.5 rounded-full bg-zinc-100 border border-zinc-300 flex items-center justify-center flex-shrink-0">
+                      <svg className="w-2 h-2 text-zinc-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                      </svg>
+                    </div>
+                  ) : (
+                    <div className="w-3.5 h-3.5 rounded-full border-2 border-zinc-300 flex-shrink-0" />
+                  )}
+                  <span className={`text-xs flex-1 leading-tight ${item.done ? 'text-zinc-400 line-through' : 'text-zinc-700'}`}>
+                    {item.label}
+                  </span>
+                  {!item.done && item.pct > 0 && (
+                    <span className="text-[10px] text-zinc-400 font-medium">+{item.pct}%</span>
+                  )}
+                </div>
+              ))}
+              <button onClick={onEdit}
+                className="w-full mt-2.5 bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-medium py-2 rounded-lg transition-colors">
+                Complete Profile →
+              </button>
+            </div>
+          )}
+
+          <div className="flex items-center justify-between mt-3 pt-2.5 border-t border-zinc-100 text-[10px] text-zinc-400">
+            <span>{doneCount} / {checklist.length} complete</span>
+            <span>{completion < 100 ? `${100 - completion}% remaining` : 'All done!'}</span>
+          </div>
+        </div>
+
+        {/* Badges */}
+        <BadgesCard user={fullUser || user} portfolio={portfolio} />
       </div>
     </div>
   )
@@ -637,6 +794,20 @@ function DetailRow({ icon, label, children }) {
   )
 }
 
+function DetailRowCard({ icon, label, children }) {
+  return (
+    <div className="flex items-center gap-2.5 bg-zinc-50 rounded-lg px-3 py-2">
+      <div className="w-7 h-7 bg-white border border-zinc-200 rounded-md flex items-center justify-center text-zinc-500 flex-shrink-0">
+        {icon}
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="text-[10px] text-zinc-400 leading-none mb-0.5">{label}</p>
+        {children}
+      </div>
+    </div>
+  )
+}
+
 // ─── Profile Edit Form ────────────────────────────────────────────────────────
 function ProfileEditForm({ portfolio, user, onSave, onCancel }) {
   const isFreelancer = user?.role === 'freelancer'
@@ -646,7 +817,6 @@ function ProfileEditForm({ portfolio, user, onSave, onCancel }) {
     githubUrl: portfolio?.githubUrl || '',
     linkedinUrl: portfolio?.linkedinUrl || '',
     portfolioUrl: portfolio?.portfolioUrl || '',
-    hourlyRate: portfolio?.hourlyRate || '',
     availability: portfolio?.availability || 'full-time',
     companyName: portfolio?.companyName || '',
     industry: portfolio?.industry || '',
@@ -677,7 +847,6 @@ function ProfileEditForm({ portfolio, user, onSave, onCancel }) {
     else if (form.bio.trim().length > 1000) e.bio = 'Bio cannot exceed 1000 characters'
     if (isFreelancer) {
       if (form.skills.length === 0) e.skills = 'Add at least one skill'
-      if (!form.hourlyRate || Number(form.hourlyRate) <= 0) e.hourlyRate = 'Hourly rate is required'
       if (form.githubUrl && !isValidUrl(form.githubUrl)) e.githubUrl = 'Enter a valid URL'
       if (form.portfolioUrl && !isValidUrl(form.portfolioUrl)) e.portfolioUrl = 'Enter a valid URL'
     } else {
@@ -690,14 +859,23 @@ function ProfileEditForm({ portfolio, user, onSave, onCancel }) {
     return Object.keys(e).length === 0
   }
 
+  // Helper: recalculate completion from current localPortfolio + a patch, then sync to navbar
+  const syncCompletion = (patch = {}) => {
+    const merged = { ...localPortfolio, ...patch }
+    const pct = calcCompletion(user?.role, merged)
+    localStorage.setItem('profileCompletion', String(pct))
+    window.dispatchEvent(new Event('profileUpdated'))
+    return pct
+  }
+
   const handleSave = async () => {
     if (!validate()) { toast.error('Please fix the errors before saving'); return }
     setSaving(true)
     try {
       const { data } = await api.post('/api/portfolio/update', { ...form, skills: form.skills })
-      localStorage.setItem('profileCompletion', String(data.completionPercent || 20))
-      window.dispatchEvent(new Event('profileUpdated'))
-      onSave({ ...data, avatarUrl: localPortfolio?.avatarUrl || data.avatarUrl })
+      const merged = { ...data, avatarUrl: localPortfolio?.avatarUrl || data.avatarUrl }
+      syncCompletion(merged)
+      onSave(merged)
       toast.success('Profile saved!')
     } catch { toast.error('Failed to save profile') }
     finally { setSaving(false) }
@@ -711,9 +889,13 @@ function ProfileEditForm({ portfolio, user, onSave, onCancel }) {
     fd.append('avatar', file)
     try {
       const { data } = await api.post('/api/portfolio/upload-avatar', fd)
-      setLocalPortfolio(prev => ({ ...prev, avatarUrl: data.avatarUrl }))
-      localStorage.setItem('profileCompletion', String(data.completionPercent || 20))
-      window.dispatchEvent(new Event('profileUpdated'))
+      setLocalPortfolio(prev => {
+        const updated = { ...prev, avatarUrl: data.avatarUrl }
+        const pct = calcCompletion(user?.role, updated)
+        localStorage.setItem('profileCompletion', String(pct))
+        window.dispatchEvent(new Event('profileUpdated'))
+        return updated
+      })
       toast.success('Photo uploaded!')
     } catch (err) {
       const msg = err?.response?.data?.message || err?.message || 'Upload failed'
@@ -723,13 +905,15 @@ function ProfileEditForm({ portfolio, user, onSave, onCancel }) {
     finally { setAvatarUploading(false) }
   }
 
-  const handleVerified = (newPct) => {
-    setLocalPortfolio(prev => ({ ...prev, paymentVerified: true }))
-    setShowVerifyModal(false)
-    if (newPct) {
-      localStorage.setItem('profileCompletion', String(newPct))
+  const handleVerified = () => {
+    setLocalPortfolio(prev => {
+      const updated = { ...prev, paymentVerified: true }
+      const pct = calcCompletion(user?.role, updated)
+      localStorage.setItem('profileCompletion', String(pct))
       window.dispatchEvent(new Event('profileUpdated'))
-    }
+      return updated
+    })
+    setShowVerifyModal(false)
     toast.success('Payment method verified!')
   }
 
@@ -742,9 +926,13 @@ function ProfileEditForm({ portfolio, user, onSave, onCancel }) {
     fd.append('title', sampleTitle || file.name)
     try {
       const { data } = await api.post('/api/portfolio/upload-sample', fd)
-      setLocalPortfolio(prev => ({ ...prev, projectSamples: [...(prev?.projectSamples || []), data.sample] }))
-      localStorage.setItem('profileCompletion', String(data.completionPercent || 20))
-      window.dispatchEvent(new Event('profileUpdated'))
+      setLocalPortfolio(prev => {
+        const updated = { ...prev, projectSamples: [...(prev?.projectSamples || []), data.sample] }
+        const pct = calcCompletion(user?.role, updated)
+        localStorage.setItem('profileCompletion', String(pct))
+        window.dispatchEvent(new Event('profileUpdated'))
+        return updated
+      })
       setSampleTitle('')
       toast.success('Portfolio sample uploaded!')
     } catch { toast.error('Upload failed') }
@@ -759,9 +947,13 @@ function ProfileEditForm({ portfolio, user, onSave, onCancel }) {
     fd.append('resume', file)
     try {
       const { data } = await api.post('/api/portfolio/upload-resume', fd)
-      setLocalPortfolio(prev => ({ ...prev, resumeUrl: data.resumeUrl }))
-      localStorage.setItem('profileCompletion', String(data.completionPercent || 20))
-      window.dispatchEvent(new Event('profileUpdated'))
+      setLocalPortfolio(prev => {
+        const updated = { ...prev, resumeUrl: data.resumeUrl }
+        const pct = calcCompletion(user?.role, updated)
+        localStorage.setItem('profileCompletion', String(pct))
+        window.dispatchEvent(new Event('profileUpdated'))
+        return updated
+      })
       toast.success('Resume uploaded!')
     } catch { toast.error('Upload failed') }
     finally { setResumeUploading(false) }
@@ -901,7 +1093,7 @@ function ProfileEditForm({ portfolio, user, onSave, onCancel }) {
 
         {/* ── Bio ── */}
         {(isFreelancer || form.clientType) && (
-          <Field label="Bio" required bonus={isFreelancer ? 15 : isIndividual ? 15 : 10} hint={`${form.bio.length}/1000`} error={errors.bio}>
+          <Field label="Bio" required bonus={isFreelancer ? 20 : isIndividual ? 15 : 10} hint={`${form.bio.length}/1000`} error={errors.bio}>
             <textarea value={form.bio}
               onChange={e => { setForm({ ...form, bio: e.target.value }); setErrors({ ...errors, bio: '' }) }}
               rows={4} maxLength={1000} className={inputClass(errors.bio)}
@@ -919,27 +1111,20 @@ function ProfileEditForm({ portfolio, user, onSave, onCancel }) {
         {/* ── Freelancer-specific fields ── */}
         {isFreelancer && (
           <>
-            <Field label="Skills" required bonus={15} error={errors.skills}>
+            <Field label="Skills" required bonus={20} error={errors.skills}>
               <SkillSelector selected={form.skills}
                 onChange={skills => { setForm({ ...form, skills }); setErrors({ ...errors, skills: '' }) }}
                 error={errors.skills} />
             </Field>
-            <div className="grid grid-cols-2 gap-4">
-              <Field label="Hourly Rate (₹)" required bonus={10} error={errors.hourlyRate}>
-                <input type="number" min="1" value={form.hourlyRate}
-                  onChange={e => { setForm({ ...form, hourlyRate: e.target.value }); setErrors({ ...errors, hourlyRate: '' }) }}
-                  className={inputClass(errors.hourlyRate)} placeholder="e.g. 500" />
-              </Field>
-              <Field label="Availability">
-                <select value={form.availability} onChange={e => setForm({ ...form, availability: e.target.value })}
-                  className={inputClass(false)}>
-                  <option value="full-time">Full-time</option>
-                  <option value="part-time">Part-time</option>
-                  <option value="unavailable">Unavailable</option>
-                </select>
-              </Field>
-            </div>
-            <Field label="GitHub URL" bonus={10} error={errors.githubUrl} hint="https://...">
+            <Field label="Availability">
+              <select value={form.availability} onChange={e => setForm({ ...form, availability: e.target.value })}
+                className={inputClass(false)}>
+                <option value="full-time">Full-time</option>
+                <option value="part-time">Part-time</option>
+                <option value="unavailable">Unavailable</option>
+              </select>
+            </Field>
+            <Field label="GitHub URL" bonus={15} error={errors.githubUrl} hint="https://...">
               <input value={form.githubUrl}
                 onChange={e => { setForm({ ...form, githubUrl: e.target.value }); setErrors({ ...errors, githubUrl: '' }) }}
                 className={inputClass(errors.githubUrl)} placeholder="https://github.com/username" />
@@ -1026,19 +1211,19 @@ function ProfileEditForm({ portfolio, user, onSave, onCancel }) {
           {showVerifyModal && (
             <PaymentVerifyModal onClose={() => setShowVerifyModal(false)} onVerified={handleVerified} />
           )}
-          <div className={`rounded-xl border p-5 ${localPortfolio?.paymentVerified ? 'bg-emerald-50 border-emerald-200' : 'bg-white border-zinc-200'}`}>
+          <div className={`rounded-xl border p-5 ${localPortfolio?.paymentVerified ? 'bg-zinc-50 border-zinc-200' : 'bg-white border-zinc-200'}`}>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${localPortfolio?.paymentVerified ? 'bg-emerald-100' : 'bg-zinc-100'}`}>
-                  <svg className={`w-5 h-5 ${localPortfolio?.paymentVerified ? 'text-emerald-600' : 'text-zinc-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${localPortfolio?.paymentVerified ? 'bg-zinc-100' : 'bg-zinc-100'}`}>
+                  <svg className={`w-5 h-5 ${localPortfolio?.paymentVerified ? 'text-zinc-600' : 'text-zinc-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
                   </svg>
                 </div>
                 <div>
-                  <p className={`text-sm font-semibold ${localPortfolio?.paymentVerified ? 'text-emerald-800' : 'text-zinc-800'}`}>
+                  <p className={`text-sm font-semibold ${localPortfolio?.paymentVerified ? 'text-zinc-800' : 'text-zinc-800'}`}>
                     {localPortfolio?.paymentVerified ? 'Payment Verified' : 'Payment Not Verified'}
                   </p>
-                  <p className={`text-xs mt-0.5 ${localPortfolio?.paymentVerified ? 'text-emerald-600' : 'text-zinc-400'}`}>
+                  <p className={`text-xs mt-0.5 ${localPortfolio?.paymentVerified ? 'text-zinc-500' : 'text-zinc-400'}`}>
                     {localPortfolio?.paymentVerified
                       ? 'Freelancers can see your payment method is valid'
                       : 'Verify to get better quality bids · +10%'}
@@ -1071,12 +1256,12 @@ function ProfileEditForm({ portfolio, user, onSave, onCancel }) {
               <div className="space-y-2">
                 {localPortfolio.projectSamples.map((s, i) => (
                   <div key={i} className="flex items-center gap-3 bg-zinc-50 border border-zinc-100 rounded-lg px-4 py-2.5">
-                    <span className="text-base">📎</span>
+                    <div className="w-7 h-7 bg-white border border-zinc-200 rounded-lg flex items-center justify-center text-zinc-500 flex-shrink-0">{SetupIcons.paperclip}</div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-zinc-700 truncate">{s.title}</p>
                       <p className="text-xs text-zinc-400 font-mono truncate">{s.fileHash?.slice(0, 24)}…</p>
                     </div>
-                    <span className="text-xs bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-md font-medium whitespace-nowrap">
+                    <span className="text-xs bg-zinc-100 text-zinc-700 px-2 py-0.5 rounded-md font-medium whitespace-nowrap">
                       SHA-256 ✓
                     </span>
                   </div>
@@ -1111,13 +1296,17 @@ function ProfileEditForm({ portfolio, user, onSave, onCancel }) {
             <div className="flex items-baseline justify-between mb-1.5">
               <label className="text-sm font-medium text-zinc-700">
                 Resume (PDF)
-                {!localPortfolio?.resumeUrl && <span className="ml-1.5 text-xs text-zinc-400 font-normal">+10%</span>}
+                {!localPortfolio?.resumeUrl && <span className="ml-1.5 text-xs text-zinc-400 font-normal">+5%</span>}
               </label>
             </div>
             {localPortfolio?.resumeUrl ? (
-              <div className="flex items-center gap-3 bg-emerald-50 border border-emerald-200 rounded-lg px-4 py-3">
-                <span className="text-lg">📄</span>
-                <p className="text-sm text-emerald-700 font-medium flex-1">Resume uploaded</p>
+              <div className="flex items-center gap-3 bg-zinc-50 border border-zinc-200 rounded-lg px-4 py-3">
+                <div className="w-7 h-7 bg-zinc-100 border border-zinc-200 rounded-lg flex items-center justify-center text-zinc-600 flex-shrink-0">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                </div>
+                <p className="text-sm text-zinc-700 font-medium flex-1">Resume uploaded</p>
                 <label className="cursor-pointer text-xs text-zinc-500 hover:text-zinc-900 font-medium transition-colors">
                   Replace
                   <input type="file" accept=".pdf" className="hidden" onChange={handleResumeUpload} />
@@ -1181,39 +1370,52 @@ export default function ProfileSetup() {
     <div className="min-h-screen bg-zinc-100">
       <Toaster />
       <Navbar />
-      <div className="max-w-2xl mx-auto p-6 pb-16">
-        <div className="flex items-center justify-between mb-5">
-          <div>
-            <h1 className="text-xl font-semibold text-zinc-900">My Profile</h1>
-            <p className="text-sm text-zinc-500 mt-0.5">
-              {mode === 'edit' ? 'Fill in your details and save' : 'How others see your profile'}
-            </p>
+
+      {/* Loading state */}
+      {mode === 'loading' && (
+        <div className="max-w-2xl mx-auto p-6">
+          <div className="bg-white rounded-xl border border-zinc-200 p-12 text-center">
+            <div className="animate-spin h-6 w-6 border-2 border-zinc-900 border-t-transparent rounded-full mx-auto mb-3" />
+            <p className="text-zinc-400 text-sm">Loading your profile…</p>
           </div>
-          {mode === 'view' && (
+        </div>
+      )}
+
+      {/* View mode */}
+      {mode === 'view' && portfolio && (
+        <div className="max-w-5xl mx-auto px-6 pb-16">
+          <div className="flex items-center justify-between mb-5 pt-6">
+            <div>
+              <h1 className="text-xl font-semibold text-zinc-900">My Profile</h1>
+              <p className="text-sm text-zinc-500 mt-0.5">This is exactly how others see you</p>
+            </div>
             <button onClick={() => navigate(user?.role === 'client' ? '/dashboard/client' : '/dashboard/freelancer')}
               className="text-sm text-zinc-500 hover:text-zinc-900 font-medium transition-colors">
               ← Dashboard
             </button>
-          )}
-        </div>
-
-        {mode === 'loading' && (
-          <div className="bg-white rounded-xl border border-zinc-200 p-12 text-center">
-            <div className="w-6 h-6 border-2 border-zinc-900 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-            <p className="text-zinc-400 text-sm">Loading your profile…</p>
           </div>
-        )}
-
-        {mode === 'view' && portfolio && (
           <ProfileCard portfolio={portfolio} user={user} fullUser={fullUser} completion={completion}
             onEdit={() => setMode('edit')}
-            onCompletionChange={pct => setCompletion(pct)} />
-        )}
+            onCompletionChange={pct => { setCompletion(pct); storeBadgeSummary(user?.role, fullUser, { ...portfolio, paymentVerified: true }); window.dispatchEvent(new Event('profileUpdated')) }} />
+        </div>
+      )}
 
-        {mode === 'edit' && (
+      {/* Edit mode */}
+      {mode === 'edit' && (
+        <div className="max-w-2xl mx-auto p-6 pb-16">
+          <div className="flex items-center justify-between mb-5">
+            <div>
+              <h1 className="text-xl font-semibold text-zinc-900">My Profile</h1>
+              <p className="text-sm text-zinc-500 mt-0.5">Fill in your details and save</p>
+            </div>
+            <button onClick={() => navigate(user?.role === 'client' ? '/dashboard/client' : '/dashboard/freelancer')}
+              className="text-sm text-zinc-500 hover:text-zinc-900 font-medium transition-colors">
+              ← Dashboard
+            </button>
+          </div>
           <ProfileEditForm portfolio={portfolio} user={user} onSave={handleSaved} onCancel={handleCancel} />
-        )}
-      </div>
+        </div>
+      )}
     </div>
   )
 }

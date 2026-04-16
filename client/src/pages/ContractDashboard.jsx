@@ -6,15 +6,15 @@ import toast, { Toaster } from 'react-hot-toast'
 
 const statusColors = {
   pending_deposit: 'bg-zinc-100 text-zinc-500',
-  funded: 'bg-blue-50 text-blue-700',
-  in_progress: 'bg-amber-50 text-amber-700',
-  submitted: 'bg-orange-50 text-orange-700',
-  review: 'bg-purple-50 text-purple-700',
-  approved: 'bg-emerald-50 text-emerald-700',
-  inaccurate_1: 'bg-red-50 text-red-600',
-  inaccurate_2: 'bg-red-100 text-red-700',
-  disputed: 'bg-red-100 text-red-800',
-  released: 'bg-emerald-100 text-emerald-700',
+  funded: 'bg-zinc-800 text-white',
+  in_progress: 'bg-zinc-900 text-white',
+  submitted: 'bg-zinc-100 text-zinc-700',
+  review: 'bg-zinc-900 text-white',
+  approved: 'bg-zinc-900 text-white',
+  inaccurate_1: 'bg-zinc-200 text-zinc-700',
+  inaccurate_2: 'bg-zinc-300 text-zinc-800',
+  disputed: 'bg-zinc-900 text-white',
+  released: 'bg-zinc-100 text-zinc-500',
   refunded: 'bg-zinc-100 text-zinc-500',
 }
 
@@ -146,7 +146,7 @@ export default function ContractDashboard() {
               </div>
             </div>
             <div className="flex flex-col items-end gap-2">
-              <span className={`px-2.5 py-1 rounded-md text-xs font-medium capitalize ${contract.status === 'active' ? 'bg-emerald-50 text-emerald-700' : 'bg-zinc-100 text-zinc-500'}`}>
+              <span className={`px-2.5 py-1 rounded-md text-xs font-medium capitalize ${contract.status === 'active' ? 'bg-zinc-900 text-white' : 'bg-zinc-100 text-zinc-500'}`}>
                 {contract.status}
               </span>
               <Link to={`/chat/${contract._id}`} className="border border-zinc-200 bg-white hover:bg-zinc-50 text-zinc-700 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors">
@@ -172,26 +172,29 @@ export default function ContractDashboard() {
           const isL = (act) => actionLoading === m._id + act
 
           return (
-            <div key={m._id} className={`bg-white rounded-xl border p-5 mb-3 ${m.status === 'disputed' ? 'border-red-200' : 'border-zinc-200'}`}>
-              <div className="flex items-start justify-between mb-3">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h3 className="font-medium text-zinc-900">{m.title}</h3>
-                    {m.isAdvance && <span className="bg-amber-50 text-amber-700 text-xs px-2 py-0.5 rounded-md font-medium">Advance</span>}
+            <div key={m._id} className="bg-white rounded-xl border border-zinc-200 p-5 mb-3">
+              <div className="flex items-start gap-4 mb-3">
+                <div className="w-10 h-10 bg-zinc-900 rounded-xl flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
+                  {m.isAdvance ? '0' : m.milestoneNumber}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="font-semibold text-sm text-zinc-900">{m.title}</h3>
+                    {m.isAdvance && <span className="bg-zinc-100 text-zinc-600 text-xs px-2 py-0.5 rounded-md font-medium border border-zinc-200">Advance</span>}
+                    <span className={`text-xs px-2 py-0.5 rounded-md font-medium ${statusColors[m.status] || 'bg-zinc-100 text-zinc-500'}`}>
+                      {m.status?.replace(/_/g, ' ').toUpperCase()}
+                    </span>
                   </div>
                   <p className="text-sm text-zinc-500 mt-0.5">{m.description}</p>
                 </div>
-                <div className="text-right">
+                <div className="text-right flex-shrink-0">
                   <div className="text-lg font-bold text-zinc-900">₹{m.amount?.toLocaleString()}</div>
-                  <span className={`text-xs px-2 py-0.5 rounded-md font-medium ${statusColors[m.status] || 'bg-zinc-100 text-zinc-500'}`}>
-                    {m.status?.replace(/_/g, ' ').toUpperCase()}
-                  </span>
                 </div>
               </div>
 
               <div className="text-xs text-zinc-400 mb-3 flex flex-wrap gap-3">
                 <span>Deadline: {new Date(m.deadline).toLocaleDateString()}</span>
-                {m.inaccuracyCount > 0 && <span className="text-red-500">Rejections: {m.inaccuracyCount}/2</span>}
+                {m.inaccuracyCount > 0 && <span className="text-zinc-600 font-medium">Rejections: {m.inaccuracyCount}/2</span>}
                 {m.submissionFileHash && (
                   <span>Hash: <a href={`/verify/${m.submissionFileHash}`} target="_blank" rel="noreferrer"
                     className="text-zinc-900 hover:underline underline-offset-2 font-mono">{m.submissionFileHash.substring(0, 12)}...</a></span>
@@ -199,7 +202,7 @@ export default function ContractDashboard() {
               </div>
 
               {m.inaccuracyNote && (
-                <div className="bg-red-50 border border-red-100 rounded-lg p-3 mb-3 text-sm text-red-700">
+                <div className="bg-zinc-50 border border-zinc-200 rounded-lg p-3 mb-3 text-sm text-zinc-700">
                   Client note: "{m.inaccuracyNote}"
                 </div>
               )}
@@ -220,16 +223,16 @@ export default function ContractDashboard() {
                         className="w-full border border-zinc-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-zinc-400 transition-colors" />
                       <div className="flex gap-2">
                         <button onClick={() => doAction(m._id, 'review', { approved: true, note: rf.note })} disabled={isL('review')}
-                          className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50 transition-colors">
+                          className="bg-zinc-900 hover:bg-zinc-800 text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50 transition-colors">
                           {isL('review') ? '...' : 'Approve Phase'}
                         </button>
                         <div className="flex-1 space-y-1">
                           <input value={rf.inaccuracyNote || ''} placeholder="What is wrong? (required to reject)"
                             onChange={e => setReviewForms({ ...reviewForms, [m._id]: { ...rf, inaccuracyNote: e.target.value } })}
-                            className="w-full border border-red-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-red-400 transition-colors" />
+                            className="w-full border border-zinc-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-zinc-500 transition-colors" />
                           <button onClick={() => doAction(m._id, 'review', { approved: false, inaccuracyNote: rf.inaccuracyNote })}
                             disabled={isL('review') || !rf.inaccuracyNote}
-                            className="w-full bg-red-500 hover:bg-red-600 text-white px-4 py-1.5 rounded-lg text-sm font-medium disabled:opacity-50 transition-colors">
+                            className="w-full border border-zinc-300 bg-white hover:bg-zinc-50 text-zinc-700 px-4 py-1.5 rounded-lg text-sm font-medium disabled:opacity-50 transition-colors">
                             Mark Inaccurate {m.inaccuracyCount === 1 ? '(triggers dispute)' : ''}
                           </button>
                         </div>
@@ -238,7 +241,7 @@ export default function ContractDashboard() {
                   )}
                   {m.status === 'approved' && (
                     <button onClick={() => doAction(m._id, 'release')} disabled={isL('release')}
-                      className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50 transition-colors">
+                      className="bg-zinc-900 hover:bg-zinc-800 text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50 transition-colors">
                       {isL('release') ? 'Releasing...' : `Release Payment — ₹${m.amount?.toLocaleString()}`}
                     </button>
                   )}
@@ -250,7 +253,7 @@ export default function ContractDashboard() {
                 <div className="space-y-2">
                   {m.status === 'funded' && (
                     <button onClick={() => doAction(m._id, 'start')} disabled={isL('start')}
-                      className="bg-amber-500 hover:bg-amber-600 text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50 transition-colors">
+                      className="bg-zinc-900 hover:bg-zinc-800 text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50 transition-colors">
                       {isL('start') ? '...' : 'Start Working'}
                     </button>
                   )}
@@ -282,7 +285,7 @@ export default function ContractDashboard() {
                 if (data.allowed) { toast.success('Contract withdrawn. Funds refunded.'); await load() }
                 else toast.error(data.message)
               } catch { toast.error('Withdrawal failed') }
-            }} className="text-sm text-red-500 hover:text-red-600 underline underline-offset-2">
+            }} className="text-sm text-zinc-400 hover:text-zinc-600 underline underline-offset-2">
               Close Contract Early
             </button>
           </div>

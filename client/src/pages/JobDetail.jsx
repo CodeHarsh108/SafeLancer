@@ -4,14 +4,16 @@ import api from '../api'
 import Navbar from '../components/Navbar'
 import toast, { Toaster } from 'react-hot-toast'
 
+const profileCompletion = () => parseInt(localStorage.getItem('profileCompletion') || '0', 10)
+
 const STATUS_LABELS = {
   applied: { label: 'Applied', color: 'bg-zinc-100 text-zinc-600' },
-  shortlisted: { label: 'Shortlisted', color: 'bg-blue-50 text-blue-700' },
-  interview_scheduled: { label: 'Interview Scheduled', color: 'bg-amber-50 text-amber-700' },
-  interviewed: { label: 'Interviewed', color: 'bg-purple-50 text-purple-700' },
-  negotiating: { label: 'In Negotiation', color: 'bg-orange-50 text-orange-700' },
-  hired: { label: 'Hired', color: 'bg-emerald-50 text-emerald-700' },
-  rejected: { label: 'Rejected', color: 'bg-red-50 text-red-600' },
+  shortlisted: { label: 'Shortlisted', color: 'bg-zinc-800 text-white' },
+  interview_scheduled: { label: 'Interview Scheduled', color: 'bg-zinc-100 text-zinc-700' },
+  interviewed: { label: 'Interviewed', color: 'bg-zinc-900 text-white' },
+  negotiating: { label: 'In Negotiation', color: 'bg-zinc-100 text-zinc-700' },
+  hired: { label: 'Hired', color: 'bg-zinc-900 text-white' },
+  rejected: { label: 'Rejected', color: 'bg-zinc-200 text-zinc-600' },
 }
 
 const TABS = ['All', 'Applied', 'Shortlisted', 'Interview', 'Interviewed']
@@ -147,7 +149,7 @@ export default function JobDetail() {
                 ? <Link to={`/clients/${job.client._id}`} className="font-medium text-zinc-700 hover:text-zinc-900 hover:underline underline-offset-2 transition-colors">{job.client.name}</Link>
                 : <span className="font-medium text-zinc-700">{job.client.name}</span>
               }
-              {job.client.rating > 0 && <span className="ml-2 text-amber-600 text-xs">★ {job.client.rating}</span>}
+              {job.client.rating > 0 && <span className="ml-2 text-zinc-600 text-xs">★ {job.client.rating}</span>}
             </div>
           )}
         </div>
@@ -157,19 +159,42 @@ export default function JobDetail() {
           <div className="bg-white rounded-xl border border-zinc-200 p-6 mb-5">
             <h2 className="text-base font-semibold text-zinc-900 mb-1">Apply for this Job</h2>
             <p className="text-sm text-zinc-500 mb-4">Fixed budget: ₹{job.budget?.toLocaleString()} — set by client</p>
-            <form onSubmit={handleApply} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-zinc-700 mb-1.5">Your Proposal</label>
-                <textarea required rows={5} value={proposal}
-                  onChange={e => setProposal(e.target.value)}
-                  className="w-full border border-zinc-200 rounded-lg px-3 py-2.5 text-sm text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:border-zinc-400 transition-colors"
-                  placeholder="Describe your approach, experience, and why you're the right fit..." />
+            {profileCompletion() < 100 ? (
+              <div className="bg-zinc-50 border border-zinc-200 rounded-xl p-4">
+                <div className="flex items-start gap-3">
+                  <div className="w-8 h-8 bg-zinc-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                    <svg className="w-4 h-4 text-zinc-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+                    </svg>
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm font-semibold text-zinc-800">Complete your profile to apply</p>
+                    <p className="text-xs text-zinc-500 mt-0.5">Your profile is {profileCompletion()}% complete. You need 100% to apply for jobs.</p>
+                    <div className="w-full bg-zinc-200 rounded-full h-1.5 mt-2 overflow-hidden">
+                      <div className="h-1.5 rounded-full bg-zinc-900 transition-all" style={{ width: `${profileCompletion()}%` }} />
+                    </div>
+                  </div>
+                  <Link to="/profile/setup"
+                    className="flex-shrink-0 text-xs bg-zinc-900 hover:bg-zinc-800 text-white font-medium px-3 py-1.5 rounded-lg transition-colors">
+                    Complete Profile
+                  </Link>
+                </div>
               </div>
-              <button type="submit" disabled={submitting}
-                className="w-full bg-zinc-900 hover:bg-zinc-800 text-white font-medium py-2.5 rounded-lg text-sm transition-colors disabled:opacity-50">
-                {submitting ? 'Submitting...' : 'Apply Now'}
-              </button>
-            </form>
+            ) : (
+              <form onSubmit={handleApply} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-zinc-700 mb-1.5">Your Proposal</label>
+                  <textarea required rows={5} value={proposal}
+                    onChange={e => setProposal(e.target.value)}
+                    className="w-full border border-zinc-200 rounded-lg px-3 py-2.5 text-sm text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:border-zinc-400 transition-colors"
+                    placeholder="Describe your approach, experience, and why you're the right fit..." />
+                </div>
+                <button type="submit" disabled={submitting}
+                  className="w-full bg-zinc-900 hover:bg-zinc-800 text-white font-medium py-2.5 rounded-lg text-sm transition-colors disabled:opacity-50">
+                  {submitting ? 'Submitting...' : 'Apply Now'}
+                </button>
+              </form>
+            )}
           </div>
         )}
 
@@ -184,19 +209,19 @@ export default function JobDetail() {
             </div>
             <p className="text-zinc-600 text-sm leading-relaxed">{myBid.proposal}</p>
             {myBid.status === 'interview_scheduled' && myBid.meetingRoomId && (
-              <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg flex items-center justify-between">
-                <p className="text-sm text-amber-800 font-medium">
+              <div className="mt-3 p-3 bg-zinc-50 border border-zinc-200 rounded-lg flex items-center justify-between">
+                <p className="text-sm text-zinc-800 font-medium">
                   Interview at {new Date(myBid.interviewScheduledAt).toLocaleString()}
                 </p>
                 <Link
                   to={`/interview/${myBid.meetingRoomId}?job=${encodeURIComponent(job.title)}&jobId=${job._id}`}
-                  className="bg-amber-500 hover:bg-amber-600 text-white px-3 py-1.5 rounded-lg text-xs font-medium">
+                  className="bg-zinc-900 hover:bg-zinc-800 text-white px-3 py-1.5 rounded-lg text-xs font-medium">
                   Join
                 </Link>
               </div>
             )}
             {myBid.status === 'rejected' && myBid.rejectionReason && (
-              <p className="mt-2 text-sm text-red-500">Reason: {myBid.rejectionReason}</p>
+              <p className="mt-2 text-sm text-zinc-500">Reason: {myBid.rejectionReason}</p>
             )}
           </div>
         )}
@@ -235,7 +260,7 @@ export default function JobDetail() {
                         <div className="flex items-center gap-2 mb-1">
                           <Link to={`/freelancers/${b.freelancer?._id}`} className="font-medium text-zinc-900 hover:underline underline-offset-2 transition-colors">{b.freelancer?.name}</Link>
                           {b.freelancer?.rating > 0 && (
-                            <span className="text-amber-600 text-xs">★ {b.freelancer.rating}</span>
+                            <span className="text-zinc-600 text-xs">★ {b.freelancer.rating}</span>
                           )}
                           {b.freelancer?.totalJobsCompleted > 0 && (
                             <span className="text-zinc-400 text-xs">{b.freelancer.totalJobsCompleted} jobs</span>
@@ -246,12 +271,12 @@ export default function JobDetail() {
                         </div>
                         <p className="text-zinc-500 text-sm leading-relaxed line-clamp-3">{b.proposal}</p>
                         {b.status === 'interview_scheduled' && (
-                          <p className="text-xs text-amber-700 mt-1 font-medium">
+                          <p className="text-xs text-zinc-600 mt-1 font-medium">
                             Interview: {new Date(b.interviewScheduledAt).toLocaleString()}
                           </p>
                         )}
                         {b.status === 'rejected' && b.rejectionReason && (
-                          <p className="text-xs text-red-500 mt-1">Reason: {b.rejectionReason}</p>
+                          <p className="text-xs text-zinc-500 mt-1">Reason: {b.rejectionReason}</p>
                         )}
                       </div>
                     </div>
@@ -277,7 +302,7 @@ export default function JobDetail() {
                                 onChange={e => setScheduledAt(e.target.value)}
                                 className="border border-zinc-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-zinc-400 transition-colors" />
                               <button onClick={() => handleSchedule(b._id)} disabled={isLoading('schedule')}
-                                className="bg-amber-500 hover:bg-amber-600 text-white px-3 py-1.5 rounded-lg text-sm font-medium disabled:opacity-50">
+                                className="bg-zinc-900 hover:bg-zinc-800 text-white px-3 py-1.5 rounded-lg text-sm font-medium disabled:opacity-50">
                                 {isLoading('schedule') ? '...' : 'Confirm'}
                               </button>
                               <button onClick={() => setSchedulingBidId(null)}
@@ -285,7 +310,7 @@ export default function JobDetail() {
                             </div>
                           ) : (
                             <button onClick={() => setSchedulingBidId(b._id)}
-                              className="bg-amber-500 hover:bg-amber-600 text-white px-3 py-1.5 rounded-lg text-sm font-medium">
+                              className="bg-zinc-900 hover:bg-zinc-800 text-white px-3 py-1.5 rounded-lg text-sm font-medium">
                               Schedule Interview
                             </button>
                           )}
@@ -299,7 +324,7 @@ export default function JobDetail() {
                         <>
                           <Link
                             to={`/interview/${b.meetingRoomId}?job=${encodeURIComponent(job.title)}&jobId=${job._id}&bidId=${b._id}`}
-                            className="bg-amber-500 hover:bg-amber-600 text-white px-3 py-1.5 rounded-lg text-sm font-medium">
+                            className="bg-zinc-900 hover:bg-zinc-800 text-white px-3 py-1.5 rounded-lg text-sm font-medium">
                             Join Interview
                           </Link>
                           <button onClick={() => action(b._id, 'interview-done')} disabled={isLoading('interview-done')}
@@ -311,7 +336,7 @@ export default function JobDetail() {
                       {b.status === 'interviewed' && (
                         <>
                           <button onClick={() => action(b._id, 'hire')} disabled={isLoading('hire')}
-                            className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-lg text-sm font-medium disabled:opacity-50 transition-colors">
+                            className="bg-zinc-900 hover:bg-zinc-800 text-white px-3 py-1.5 rounded-lg text-sm font-medium disabled:opacity-50 transition-colors">
                             {isLoading('hire') ? '...' : `Hire — ₹${job.budget?.toLocaleString()}`}
                           </button>
                           <button onClick={() => handleNegotiate(b._id)} disabled={isLoading('negotiate')}

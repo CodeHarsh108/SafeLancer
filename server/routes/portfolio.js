@@ -18,7 +18,7 @@ const upload = multer({ storage, limits: { fileSize: 10 * 1024 * 1024 } });
 router.get('/:userId', async (req, res) => {
   try {
     const portfolio = await Portfolio.findOne({ user: req.params.userId })
-      .populate('user', 'name email role rating totalJobsCompleted onTimeDeliveryRate disputeRate');
+      .populate('user', 'name role rating totalJobsCompleted onTimeDeliveryRate disputeRate');
     if (!portfolio) return res.status(404).json({ message: 'Portfolio not found' });
     res.json(portfolio);
   } catch (err) {
@@ -30,28 +30,29 @@ router.get('/:userId', async (req, res) => {
 router.post('/update', auth, async (req, res) => {
   try {
     const {
-      bio, skills, githubUrl, linkedinUrl, portfolioUrl, hourlyRate, availability,
+      bio, skills, githubUrl, linkedinUrl, portfolioUrl, availability,
       companyName, industry,
       // new client fields
       clientType, location, yearsHiring, preferredComm, companySize, websiteUrl
     } = req.body;
-    const update = {
-      bio, skills, githubUrl, linkedinUrl, portfolioUrl, hourlyRate, availability,
-      companyName, industry,
-      clientType, location, yearsHiring, preferredComm, companySize, websiteUrl
-    };
-
     // Fetch current portfolio to include existing projectSamples/resumeUrl in completion calc
     const existing = await Portfolio.findOne({ user: req.user.id });
+    const resolvedRole = existing?.role || req.user.role;
+    const update = {
+      bio, skills, githubUrl, linkedinUrl, portfolioUrl, availability,
+      companyName, industry,
+      clientType, location, yearsHiring, preferredComm, companySize, websiteUrl,
+      role: resolvedRole   // always persist role so upsert creates it correctly
+    };
+
     const mergedData = {
       ...update,
       projectSamples: existing?.projectSamples || [],
       resumeUrl: existing?.resumeUrl || '',
       avatarUrl: update.avatarUrl || existing?.avatarUrl || '',
       paymentVerified: existing?.paymentVerified || false,
-      role: existing?.role || req.user.role
     };
-    update.completionPercent = calcCompletion(mergedData.role, mergedData);
+    update.completionPercent = calcCompletion(resolvedRole, mergedData);
 
     const portfolio = await Portfolio.findOneAndUpdate(
       { user: req.user.id },

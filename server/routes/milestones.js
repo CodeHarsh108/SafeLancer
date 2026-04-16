@@ -215,6 +215,66 @@ router.post('/:id/release', auth, async (req, res) => {
       }
     }
 
+    // Check if all milestones are now released → mark contract completed + update stats
+    // Re-fetch fresh state after all transitions above have completed
+    const allMilestones = await Milestone.find({ contract: milestone.contract });
+    const allReleased = allMilestones.every(m => m.status === 'released');
+
+    if (allReleased) {
+      const Contract = require('../models/Contract');
+      const Portfolio = require('../models/Portfolio');
+      const User = require('../models/User');
+      const Job = require('../models/Job');
+
+      const contract = await Contract.findByIdAndUpdate(
+        milestone.contract,
+        { status: 'completed' },
+        { new: true }
+      );
+
+      if (contract) {
+        // Update job status to completed
+        await Job.findByIdAndUpdate(contract.job, { status: 'completed' });
+
+        // Update client portfolio: projectsCompleted + rolling avgBudget
+        const clientPortfolio = await Portfolio.findOne({ user: contract.client });
+        if (clientPortfolio) {
+          const newCompleted = (clientPortfolio.projectsCompleted || 0) + 1;
+          const oldAvg = clientPortfolio.avgBudget || 0;
+          const newAvg = Math.round((oldAvg * (newCompleted - 1) + contract.amount) / newCompleted);
+          await Portfolio.findOneAndUpdate(
+            { user: contract.client },
+            { projectsCompleted: newCompleted, avgBudget: newAvg }
+          );
+        }
+
+        // Update freelancer onTimeDeliveryRate (rolling avg across all completed contracts)
+        const phaseMilestones = allMilestones.filter(m => !m.isAdvance);
+        const onTimeCount = phaseMilestones.filter(m =>
+          m.submittedAt && m.deadline && new Date(m.submittedAt) <= new Date(m.deadline)
+        ).length;
+        const contractRate = phaseMilestones.length > 0
+          ? Math.round((onTimeCount / phaseMilestones.length) * 100)
+          : 100;
+
+        // Rolling average of onTimeDeliveryRate across all completed contracts for this freelancer
+        const completedContracts = await Contract.find({
+          freelancer: contract.freelancer,
+          status: 'completed',
+          _id: { $ne: contract._id }
+        });
+        const freelancer = await User.findById(contract.freelancer);
+        if (freelancer) {
+          const prevCount = completedContracts.length;
+          const prevRate = freelancer.onTimeDeliveryRate || 100;
+          const newRate = prevCount > 0
+            ? Math.round((prevRate * prevCount + contractRate) / (prevCount + 1))
+            : contractRate;
+          await User.findByIdAndUpdate(contract.freelancer, { onTimeDeliveryRate: newRate });
+        }
+      }
+    }
+
     res.json(updated);
   } catch (err) {
     res.status(500).json({ message: 'Server error', error: err.message });

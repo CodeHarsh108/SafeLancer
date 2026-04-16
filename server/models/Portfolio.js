@@ -8,7 +8,6 @@ const portfolioSchema = new mongoose.Schema({
   githubUrl: { type: String, default: '' },
   linkedinUrl: { type: String, default: '' },
   portfolioUrl: { type: String, default: '' },
-  hourlyRate: { type: Number, default: 0 },
   availability: { type: String, enum: ['full-time', 'part-time', 'unavailable'], default: 'full-time' },
   projectSamples: [{
     title: String,

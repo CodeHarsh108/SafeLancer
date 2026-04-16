@@ -59,27 +59,34 @@ export default function JobBoard() {
           : jobs.length === 0
           ? <div className="text-center py-12 text-zinc-400 text-sm">No jobs found matching your filters</div>
           : jobs.map(job => (
-            <div key={job._id} className="bg-white rounded-xl border border-zinc-200 p-5 mb-3 hover:border-zinc-300 transition-colors">
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <h2 className="text-base font-semibold text-zinc-900">{job.title}</h2>
-                  <p className="text-zinc-500 text-sm mt-1 line-clamp-2">{job.description}</p>
-                  <div className="flex flex-wrap gap-1.5 mt-3">
-                    {job.skills?.map(s => (
-                      <span key={s} className="bg-zinc-100 text-zinc-600 px-2 py-0.5 rounded text-xs font-medium">{s}</span>
-                    ))}
+            <div key={job._id} className="bg-white rounded-xl border border-zinc-200 p-5 mb-3 hover:border-zinc-300 transition-colors flex items-start gap-4">
+              <div className="w-10 h-10 bg-zinc-900 rounded-xl flex items-center justify-center text-white flex-shrink-0 mt-0.5">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                </svg>
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex-1 min-w-0">
+                    <h2 className="text-sm font-semibold text-zinc-900">{job.title}</h2>
+                    <p className="text-zinc-500 text-sm mt-1 line-clamp-2">{job.description}</p>
+                    <div className="flex flex-wrap gap-1.5 mt-2">
+                      {job.skills?.map(s => (
+                        <span key={s} className="bg-zinc-100 text-zinc-600 px-2 py-0.5 rounded text-xs font-medium">{s}</span>
+                      ))}
+                    </div>
+                    <div className="flex flex-wrap gap-4 mt-2 text-xs text-zinc-500">
+                      <span>Budget: <strong className="text-zinc-700">₹{job.budget?.toLocaleString()}</strong></span>
+                      <span>Deadline: <strong className="text-zinc-700">{new Date(job.deadline).toLocaleDateString()}</strong></span>
+                      <span>Applications: <strong className="text-zinc-700">{job.bids?.length || 0}</strong></span>
+                      {job.client?.rating > 0 && <span>Client: <strong className="text-zinc-700">★ {job.client.rating}</strong></span>}
+                    </div>
                   </div>
-                  <div className="flex flex-wrap gap-4 mt-3 text-sm text-zinc-500">
-                    <span>Budget: <strong className="text-zinc-700">₹{job.budget?.toLocaleString()}</strong></span>
-                    <span>Deadline: <strong className="text-zinc-700">{new Date(job.deadline).toLocaleDateString()}</strong></span>
-                    <span>Applications: <strong className="text-zinc-700">{job.bids?.length || 0}</strong></span>
-                    {job.client?.rating > 0 && <span>Client: <strong className="text-zinc-700">★ {job.client.rating}</strong></span>}
-                  </div>
+                  <Link to={`/jobs/${job._id}`}
+                    className="flex-shrink-0 bg-zinc-900 hover:bg-zinc-800 text-white px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors">
+                    View & Apply
+                  </Link>
                 </div>
-                <Link to={`/jobs/${job._id}`}
-                  className="ml-4 bg-zinc-900 hover:bg-zinc-800 text-white px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors">
-                  View & Apply
-                </Link>
               </div>
             </div>
           ))

@@ -57,9 +57,16 @@ async function createMilestonesForContract(contract) {
 router.post('/', auth, async (req, res) => {
   try {
     if (req.user.role !== 'client') return res.status(403).json({ message: 'Clients only' });
+    const Portfolio = require('../models/Portfolio');
+    const portfolio = await Portfolio.findOne({ user: req.user.id });
+    if (!portfolio || portfolio.completionPercent < 100) {
+      return res.status(403).json({ message: 'Complete your profile to 100% before posting a job', completionPercent: portfolio?.completionPercent || 0 });
+    }
     const { title, description, budget, skills, deadline } = req.body;
     const job = new Job({ client: req.user.id, title, description, budget, skills, deadline });
     await job.save();
+    // Track jobs posted on client portfolio
+    await Portfolio.findOneAndUpdate({ user: req.user.id }, { $inc: { projectsPosted: 1 } });
     res.status(201).json(job);
   } catch (err) {
     res.status(500).json({ message: 'Server error', error: err.message });
@@ -156,6 +163,11 @@ router.get('/:id', async (req, res) => {
 router.post('/:id/apply', auth, async (req, res) => {
   try {
     if (req.user.role !== 'freelancer') return res.status(403).json({ message: 'Freelancers only' });
+    const Portfolio = require('../models/Portfolio');
+    const portfolio = await Portfolio.findOne({ user: req.user.id });
+    if (!portfolio || portfolio.completionPercent < 100) {
+      return res.status(403).json({ message: 'Complete your profile to 100% before applying', completionPercent: portfolio?.completionPercent || 0 });
+    }
     const job = await Job.findById(req.params.id);
     if (!job || job.status !== 'open') return res.status(400).json({ message: 'Job not available' });
 
@@ -365,17 +377,16 @@ router.patch('/:id/applications/:bidId/reject', auth, async (req, res) => {
 // GET /api/jobs/freelancers/browse — filter-based freelancer browse
 router.get('/freelancers/browse', async (req, res) => {
   try {
-    const { skills, minRating, availability, maxRate } = req.query;
+    const { skills, minRating, availability } = req.query;
     const Portfolio = require('../models/Portfolio');
 
     let portfolioFilter = { role: 'freelancer', isVisible: true };
     if (skills) portfolioFilter.skills = { $in: skills.split(',').map(s => s.trim()) };
     if (availability) portfolioFilter.availability = availability;
-    if (maxRate) portfolioFilter.hourlyRate = { $lte: Number(maxRate) };
 
     const portfolios = await Portfolio.find(portfolioFilter).populate({
       path: 'user',
-      select: 'name email rating totalJobsCompleted onTimeDeliveryRate',
+      select: 'name rating totalJobsCompleted onTimeDeliveryRate',
       match: minRating ? { rating: { $gte: Number(minRating) } } : {}
     });
 

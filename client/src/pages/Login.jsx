@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import api from '../api'
 import toast, { Toaster } from 'react-hot-toast'
+import { calcCompletion } from '../utils/profileCompletion'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001'
 
@@ -28,7 +29,9 @@ export default function Login() {
         const { data: meData } = await api.get('/api/auth/me', {
           headers: { Authorization: `Bearer ${data.token}` }
         })
-        const pct = meData.portfolio?.completionPercent ?? 20
+        const pct = meData.portfolio
+          ? calcCompletion(meData.user?.role, meData.portfolio)
+          : 20
         localStorage.setItem('profileCompletion', String(pct))
       } catch {
         localStorage.setItem('profileCompletion', '20')

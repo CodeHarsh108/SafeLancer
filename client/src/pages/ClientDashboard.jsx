@@ -101,16 +101,21 @@ export default function ClientDashboard() {
           <section className="mb-6">
             <h2 className="text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-3">Interviews Today</h2>
             {interviewsToday.map(b => (
-              <div key={b._id} className="bg-white rounded-xl border border-amber-200 p-4 mb-2 flex items-center justify-between">
-                <div>
-                  <div className="font-medium text-zinc-900">{b.freelancer?.name}</div>
+              <div key={b._id} className="bg-white rounded-xl border border-zinc-200 p-4 mb-2 flex items-center gap-4">
+                <div className="w-10 h-10 bg-zinc-900 rounded-xl flex items-center justify-center text-white flex-shrink-0">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.069A1 1 0 0121 8.867v6.266a1 1 0 01-1.447.894L15 14M3 8a2 2 0 012-2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z" />
+                  </svg>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="font-semibold text-sm text-zinc-900">{b.freelancer?.name}</div>
                   <div className="text-sm text-zinc-500">
                     {b.job.title} · {new Date(b.interviewScheduledAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </div>
                 </div>
                 <Link
                   to={`/interview/${b.meetingRoomId}?job=${encodeURIComponent(b.job.title)}&jobId=${b.job._id}&bidId=${b._id}`}
-                  className="bg-amber-500 hover:bg-amber-600 text-white px-4 py-1.5 rounded-lg text-sm font-medium transition-colors"
+                  className="bg-zinc-900 hover:bg-zinc-800 text-white px-4 py-1.5 rounded-lg text-sm font-medium transition-colors flex-shrink-0"
                 >
                   Join Interview
                 </Link>
@@ -126,29 +131,29 @@ export default function ClientDashboard() {
             {awaitingDecision.map(b => {
               const isLoading = (suf) => actionLoading === b._id + suf
               return (
-                <div key={b._id} className="bg-white rounded-xl border border-zinc-200 p-4 mb-2">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <div className="font-medium text-zinc-900">{b.freelancer?.name}</div>
-                      <div className="text-sm text-zinc-500">{b.job.title} · ₹{b.job.budget?.toLocaleString()}</div>
-                      {b.freelancer?.rating > 0 && (
-                        <div className="text-amber-600 text-xs mt-0.5">★ {b.freelancer.rating} · {b.freelancer.totalJobsCompleted} jobs</div>
-                      )}
-                    </div>
-                    <div className="flex gap-2 flex-shrink-0">
-                      <button onClick={() => quickAction(b.job._id, b._id, 'hire')} disabled={isLoading('hire')}
-                        className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-lg text-sm font-medium disabled:opacity-50">
-                        {isLoading('hire') ? '...' : 'Hire'}
-                      </button>
-                      <button onClick={() => quickAction(b.job._id, b._id, 'negotiate')} disabled={isLoading('negotiate')}
-                        className="border border-zinc-200 bg-white hover:bg-zinc-50 text-zinc-700 px-3 py-1.5 rounded-lg text-sm font-medium disabled:opacity-50">
-                        {isLoading('negotiate') ? '...' : 'Negotiate'}
-                      </button>
-                      <button onClick={() => quickAction(b.job._id, b._id, 'reject')} disabled={isLoading('reject')}
-                        className="border border-zinc-200 bg-white hover:bg-zinc-50 text-zinc-500 px-3 py-1.5 rounded-lg text-sm font-medium disabled:opacity-50">
-                        Reject
-                      </button>
-                    </div>
+                <div key={b._id} className="bg-white rounded-xl border border-zinc-200 p-4 mb-2 flex items-center gap-4">
+                  <div className="w-10 h-10 bg-zinc-900 rounded-xl flex items-center justify-center text-white flex-shrink-0">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                    </svg>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-semibold text-sm text-zinc-900">{b.freelancer?.name}</div>
+                    <div className="text-sm text-zinc-500">{b.job.title} · ₹{b.job.budget?.toLocaleString()}{b.freelancer?.rating > 0 ? ` · ★ ${b.freelancer.rating}` : ''}</div>
+                  </div>
+                  <div className="flex gap-2 flex-shrink-0">
+                    <button onClick={() => quickAction(b.job._id, b._id, 'hire')} disabled={isLoading('hire')}
+                      className="bg-zinc-900 hover:bg-zinc-800 text-white px-3 py-1.5 rounded-lg text-sm font-medium disabled:opacity-50">
+                      {isLoading('hire') ? '...' : 'Hire'}
+                    </button>
+                    <button onClick={() => quickAction(b.job._id, b._id, 'negotiate')} disabled={isLoading('negotiate')}
+                      className="border border-zinc-200 bg-white hover:bg-zinc-50 text-zinc-700 px-3 py-1.5 rounded-lg text-sm font-medium disabled:opacity-50">
+                      {isLoading('negotiate') ? '...' : 'Negotiate'}
+                    </button>
+                    <button onClick={() => quickAction(b.job._id, b._id, 'reject')} disabled={isLoading('reject')}
+                      className="border border-zinc-200 bg-white hover:bg-zinc-50 text-zinc-500 px-3 py-1.5 rounded-lg text-sm font-medium disabled:opacity-50">
+                      Reject
+                    </button>
                   </div>
                 </div>
               )
@@ -162,12 +167,17 @@ export default function ClientDashboard() {
           {activeContracts.length === 0
             ? <div className="bg-white rounded-xl border border-zinc-200 p-6 text-center text-zinc-400 text-sm">No active contracts yet</div>
             : activeContracts.map(c => (
-              <div key={c._id} className="bg-white rounded-xl border border-zinc-200 p-4 mb-2 flex items-center justify-between">
-                <div>
-                  <div className="font-medium text-zinc-900">{c.job?.title || 'Contract'}</div>
+              <div key={c._id} className="bg-white rounded-xl border border-zinc-200 p-4 mb-2 flex items-center gap-4">
+                <div className="w-10 h-10 bg-zinc-900 rounded-xl flex items-center justify-center text-white flex-shrink-0">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                  </svg>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="font-semibold text-sm text-zinc-900">{c.job?.title || 'Contract'}</div>
                   <div className="text-sm text-zinc-500">with {c.freelancer?.name} · ₹{c.amount?.toLocaleString()} · {c.milestoneCount} phases</div>
                 </div>
-                <Link to={`/contracts/${c._id}`} className="border border-zinc-200 bg-white hover:bg-zinc-50 text-zinc-700 px-4 py-1.5 rounded-lg text-sm font-medium transition-colors">
+                <Link to={`/contracts/${c._id}`} className="border border-zinc-200 bg-white hover:bg-zinc-50 text-zinc-700 px-4 py-1.5 rounded-lg text-sm font-medium transition-colors flex-shrink-0">
                   View Contract
                 </Link>
               </div>
@@ -180,12 +190,17 @@ export default function ClientDashboard() {
           <section className="mb-6">
             <h2 className="text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-3">Open Negotiations</h2>
             {negotiations.map(n => (
-              <div key={n._id} className="bg-white rounded-xl border border-zinc-200 p-4 mb-2 flex items-center justify-between">
-                <div>
-                  <div className="font-medium text-zinc-900">{n.job?.title}</div>
+              <div key={n._id} className="bg-white rounded-xl border border-zinc-200 p-4 mb-2 flex items-center gap-4">
+                <div className="w-10 h-10 bg-zinc-900 rounded-xl flex items-center justify-center text-white flex-shrink-0">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                  </svg>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="font-semibold text-sm text-zinc-900">{n.job?.title}</div>
                   <div className="text-sm text-zinc-500">Round {n.currentRound}/{n.maxRounds} · with {n.freelancer?.name}</div>
                 </div>
-                <Link to={`/negotiations/${n._id}`} className="border border-zinc-200 bg-white hover:bg-zinc-50 text-zinc-700 px-4 py-1.5 rounded-lg text-sm font-medium transition-colors">
+                <Link to={`/negotiations/${n._id}`} className="border border-zinc-200 bg-white hover:bg-zinc-50 text-zinc-700 px-4 py-1.5 rounded-lg text-sm font-medium transition-colors flex-shrink-0">
                   View
                 </Link>
               </div>
@@ -210,23 +225,26 @@ export default function ClientDashboard() {
                 hired: bids.filter(b => b.status === 'hired').length,
               }
               return (
-                <div key={j._id} className="bg-white rounded-xl border border-zinc-200 p-4 mb-2">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <div className="font-medium text-zinc-900">{j.title}</div>
-                      <div className="text-sm text-zinc-500 mt-0.5">₹{j.budget?.toLocaleString()} · <span className="capitalize">{j.status}</span></div>
-                      <div className="flex gap-3 mt-1.5 text-xs text-zinc-400">
-                        {counts.applied > 0 && <span>{counts.applied} applied</span>}
-                        {counts.shortlisted > 0 && <span className="text-zinc-600">{counts.shortlisted} shortlisted</span>}
-                        {counts.interview > 0 && <span className="text-amber-600">{counts.interview} interview</span>}
-                        {counts.hired > 0 && <span className="text-emerald-600">{counts.hired} hired</span>}
-                        {bids.length === 0 && <span>No applications yet</span>}
-                      </div>
-                    </div>
-                    <Link to={`/jobs/${j._id}`} className="border border-zinc-200 bg-white hover:bg-zinc-50 text-zinc-700 px-4 py-1.5 rounded-lg text-sm font-medium transition-colors flex-shrink-0">
-                      Manage
-                    </Link>
+                <div key={j._id} className="bg-white rounded-xl border border-zinc-200 p-4 mb-2 flex items-center gap-4">
+                  <div className="w-10 h-10 bg-zinc-900 rounded-xl flex items-center justify-center text-white flex-shrink-0">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
                   </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-semibold text-sm text-zinc-900">{j.title}</div>
+                    <div className="text-sm text-zinc-500 mt-0.5">₹{j.budget?.toLocaleString()} · <span className="capitalize">{j.status}</span></div>
+                    <div className="flex gap-3 mt-1.5 text-xs text-zinc-400">
+                      {counts.applied > 0 && <span>{counts.applied} applied</span>}
+                      {counts.shortlisted > 0 && <span className="text-zinc-600">{counts.shortlisted} shortlisted</span>}
+                      {counts.interview > 0 && <span className="text-zinc-600">{counts.interview} interview</span>}
+                      {counts.hired > 0 && <span className="text-zinc-700">{counts.hired} hired</span>}
+                      {bids.length === 0 && <span>No applications yet</span>}
+                    </div>
+                  </div>
+                  <Link to={`/jobs/${j._id}`} className="border border-zinc-200 bg-white hover:bg-zinc-50 text-zinc-700 px-4 py-1.5 rounded-lg text-sm font-medium transition-colors flex-shrink-0">
+                    Manage
+                  </Link>
                 </div>
               )
             })
