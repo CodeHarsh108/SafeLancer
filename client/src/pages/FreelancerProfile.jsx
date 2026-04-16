@@ -129,7 +129,7 @@ export default function FreelancerProfile() {
     ? (profile.avatarUrl.startsWith('http') ? profile.avatarUrl : `${FILE_BASE}${profile.avatarUrl}`)
     : null
 
-  const { earned: earnedBadges, locked: lockedBadges, total: totalBadges } = computeBadges('freelancer', profile.user, profile)
+  const { earned: earnedBadges, total: totalBadges } = computeBadges('freelancer', profile.user, profile)
 
   const inputCls = "w-full border border-zinc-200 rounded-lg px-3 py-2.5 text-sm text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:border-zinc-400 transition-colors"
 
@@ -255,13 +255,12 @@ export default function FreelancerProfile() {
             <span className="text-xs text-zinc-400">{earnedBadges.length} / {totalBadges} earned</span>
           </div>
 
-          {earnedBadges.length === 0 && lockedBadges.length === 0 && (
-            <p className="text-sm text-zinc-400 italic">No badges yet.</p>
+          {earnedBadges.length === 0 && (
+            <p className="text-sm text-zinc-400 italic">No badges earned yet.</p>
           )}
 
-          {/* Earned */}
           {earnedBadges.length > 0 && (
-            <div className="flex flex-col gap-1.5 mb-2">
+            <div className="flex flex-col gap-1.5">
               {earnedBadges.map(badge => {
                 const c = BADGE_COLORS[badge.color]
                 return (
@@ -276,26 +275,6 @@ export default function FreelancerProfile() {
                   </div>
                 )
               })}
-            </div>
-          )}
-
-          {/* Still to unlock */}
-          {earnedBadges.length > 0 && lockedBadges.length > 0 && (
-            <p className="text-[10px] text-zinc-400 font-semibold uppercase tracking-wider mb-1.5">Still to unlock</p>
-          )}
-          {lockedBadges.length > 0 && (
-            <div className="flex flex-col gap-1.5">
-              {lockedBadges.map(badge => (
-                <div key={badge.id} className="flex items-start gap-2 border border-zinc-100 rounded-lg px-2.5 py-2 bg-zinc-50 opacity-50">
-                  <div className="w-6 h-6 rounded-md bg-zinc-200 text-zinc-400 flex items-center justify-center flex-shrink-0 mt-0.5">
-                    {badge.icon}
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-[11px] font-semibold text-zinc-500 leading-tight truncate">{badge.title}</p>
-                    <p className="text-[10px] text-zinc-400 mt-0.5 leading-tight line-clamp-2">{badge.description}</p>
-                  </div>
-                </div>
-              ))}
             </div>
           )}
         </div>

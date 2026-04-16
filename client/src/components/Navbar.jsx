@@ -62,7 +62,7 @@ export default function Navbar() {
   // Build the badge list for the popover from localStorage earned IDs
   const allBadges = user?.role === 'freelancer' ? FREELANCER_BADGES : CLIENT_BADGES
   const earnedBadges = allBadges.filter(b => earnedIds.includes(b.id))
-  const lockedBadges = allBadges.filter(b => !earnedIds.includes(b.id))
+
   const hasAnyBadgeData = totalCount > 0
 
   return (
@@ -165,25 +165,6 @@ export default function Navbar() {
                             </div>
                           )}
 
-                          {/* Locked */}
-                          {lockedBadges.length > 0 && (
-                            <div>
-                              <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400 px-1 mb-2">Still to unlock</p>
-                              <div className="space-y-1.5">
-                                {lockedBadges.map(badge => (
-                                  <div key={badge.id} className="flex items-center gap-2.5 border border-zinc-100 rounded-lg px-3 py-2 bg-zinc-50 opacity-50">
-                                    <div className="w-6 h-6 rounded-md bg-zinc-200 text-zinc-400 flex items-center justify-center flex-shrink-0">
-                                      {badge.icon}
-                                    </div>
-                                    <div className="min-w-0">
-                                      <p className="text-xs font-semibold text-zinc-500 leading-tight">{badge.title}</p>
-                                      <p className="text-[11px] text-zinc-400 mt-0.5 leading-tight">{badge.description}</p>
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          )}
                         </>
                       )}
                     </div>
