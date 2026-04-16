@@ -5,9 +5,6 @@ import { FREELANCER_BADGES, CLIENT_BADGES, BADGE_COLORS } from '../utils/badges'
 export default function Navbar() {
   const navigate = useNavigate()
   const user = JSON.parse(localStorage.getItem('user') || 'null')
-  const [profileCompletion, setProfileCompletion] = useState(
-    parseInt(localStorage.getItem('profileCompletion') || '0', 10)
-  )
   const [badgeOpen, setBadgeOpen] = useState(false)
   const [earnedIds, setEarnedIds] = useState(() => {
     try { return JSON.parse(localStorage.getItem('earnedBadgeIds') || '[]') } catch { return [] }
@@ -20,11 +17,8 @@ export default function Navbar() {
   )
   const badgeRef = useRef(null)
 
-  const showBanner = user && user.role !== 'admin' && profileCompletion < 100
-
   useEffect(() => {
     const sync = () => {
-      setProfileCompletion(parseInt(localStorage.getItem('profileCompletion') || '0', 10))
       try { setEarnedIds(JSON.parse(localStorage.getItem('earnedBadgeIds') || '[]')) } catch {}
       setEarnedCount(parseInt(localStorage.getItem('earnedBadgeCount') || '0', 10))
       setTotalCount(parseInt(localStorage.getItem('totalBadgeCount') || '0', 10))
@@ -54,11 +48,6 @@ export default function Navbar() {
     ? '/dashboard/freelancer'
     : '/admin'
 
-  const barColor =
-    profileCompletion < 40 ? 'bg-red-400' :
-    profileCompletion < 70 ? 'bg-amber-400' :
-    'bg-zinc-900'
-
   // Build the badge list for the popover from localStorage earned IDs
   const allBadges = user?.role === 'freelancer' ? FREELANCER_BADGES : CLIENT_BADGES
   const earnedBadges = allBadges.filter(b => earnedIds.includes(b.id))
@@ -78,13 +67,8 @@ export default function Navbar() {
             {user.role === 'client' && (
               <Link to="/freelancers" className="text-zinc-500 hover:text-zinc-900 text-sm font-medium transition-colors">Find Talent</Link>
             )}
-            <Link to="/profile/setup" className="text-zinc-500 hover:text-zinc-900 text-sm font-medium transition-colors flex items-center gap-1.5">
+            <Link to="/profile/setup" className="text-zinc-500 hover:text-zinc-900 text-sm font-medium transition-colors">
               Profile
-              {profileCompletion < 100 && (
-                <span className="text-[10px] bg-zinc-900 text-white rounded px-1.5 py-0.5 leading-none font-semibold">
-                  {profileCompletion}%
-                </span>
-              )}
             </Link>
 
             {/* Badge indicator */}
@@ -189,28 +173,6 @@ export default function Navbar() {
         )}
       </nav>
 
-      {showBanner && (
-        <div className="border-b border-zinc-200 bg-white px-6 py-2 flex items-center gap-4">
-          <div className="w-28 bg-zinc-100 rounded-full h-1.5 overflow-hidden">
-            <div
-              className={`h-full rounded-full transition-all ${barColor}`}
-              style={{ width: `${profileCompletion}%` }}
-            />
-          </div>
-          <span className="text-xs text-zinc-500 flex-1">
-            Profile <strong className="text-zinc-700">{profileCompletion}%</strong> complete
-            {profileCompletion < 60
-              ? ' — Complete your profile to be found by clients'
-              : ' — Almost there!'}
-          </span>
-          <Link
-            to="/profile/setup"
-            className="text-xs font-semibold text-zinc-900 hover:underline underline-offset-2 whitespace-nowrap"
-          >
-            Complete →
-          </Link>
-        </div>
-      )}
     </div>
   )
 }
