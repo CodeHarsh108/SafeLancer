@@ -128,7 +128,7 @@ export default function ClientProfile() {
     ? (profile.avatarUrl.startsWith('http') ? profile.avatarUrl : `${FILE_BASE}${profile.avatarUrl}`)
     : null
 
-  const { earned: earnedBadges } = computeBadges(profile.user?.role || 'client', profile.user, profile)
+  const { earned: earnedBadges, locked: lockedBadges, total: totalBadges } = computeBadges(profile.user?.role || 'client', profile.user, profile)
 
   const avgRating = ratings.length > 0
     ? (ratings.reduce((s, r) => s + r.stars, 0) / ratings.length).toFixed(1)
@@ -263,31 +263,56 @@ export default function ClientProfile() {
         )}
 
         {/* ── Badges ── */}
-        {earnedBadges.length > 0 && (
-          <div className="bg-white rounded-xl border border-zinc-200 p-5 mb-4">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-sm font-semibold text-zinc-800">Badges & Achievements</h2>
-              <span className="text-xs text-zinc-400">{earnedBadges.length} earned</span>
-            </div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+        <div className="bg-white rounded-xl border border-zinc-200 p-5 mb-4">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-sm font-semibold text-zinc-800">Badges & Achievements</h2>
+            <span className="text-xs text-zinc-400">{earnedBadges.length} / {totalBadges} earned</span>
+          </div>
+
+          {earnedBadges.length === 0 && lockedBadges.length === 0 && (
+            <p className="text-sm text-zinc-400 italic">No badges yet.</p>
+          )}
+
+          {/* Earned */}
+          {earnedBadges.length > 0 && (
+            <div className="grid grid-cols-2 gap-1.5 mb-2">
               {earnedBadges.map(badge => {
                 const c = BADGE_COLORS[badge.color]
                 return (
-                  <div key={badge.id}
-                    className={`flex items-center gap-3 border rounded-xl px-3 py-2.5 ${c.earned}`}>
-                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${c.icon}`}>
+                  <div key={badge.id} className={`flex items-start gap-2 border rounded-lg px-2.5 py-2 ${c.earned}`}>
+                    <div className={`w-6 h-6 rounded-md flex items-center justify-center flex-shrink-0 mt-0.5 ${c.icon}`}>
                       {badge.icon}
                     </div>
                     <div className="min-w-0">
-                      <p className="text-xs font-semibold leading-tight">{badge.title}</p>
-                      <p className="text-xs opacity-70 mt-0.5 leading-snug">{badge.description}</p>
+                      <p className="text-[11px] font-semibold leading-tight truncate">{badge.title}</p>
+                      <p className="text-[10px] opacity-60 mt-0.5 leading-tight line-clamp-2">{badge.description}</p>
                     </div>
                   </div>
                 )
               })}
             </div>
-          </div>
-        )}
+          )}
+
+          {/* Still to unlock */}
+          {earnedBadges.length > 0 && lockedBadges.length > 0 && (
+            <p className="text-[10px] text-zinc-400 font-semibold uppercase tracking-wider mb-1.5">Still to unlock</p>
+          )}
+          {lockedBadges.length > 0 && (
+            <div className="grid grid-cols-2 gap-1.5">
+              {lockedBadges.map(badge => (
+                <div key={badge.id} className="flex items-start gap-2 border border-zinc-100 rounded-lg px-2.5 py-2 bg-zinc-50 opacity-50">
+                  <div className="w-6 h-6 rounded-md bg-zinc-200 text-zinc-400 flex items-center justify-center flex-shrink-0 mt-0.5">
+                    {badge.icon}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[11px] font-semibold text-zinc-500 leading-tight truncate">{badge.title}</p>
+                    <p className="text-[10px] text-zinc-400 mt-0.5 leading-tight line-clamp-2">{badge.description}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
 
       </div>
     </div>

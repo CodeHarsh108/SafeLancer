@@ -693,8 +693,8 @@ function ProfileCard({ portfolio, user, fullUser, completion, onEdit, onCompleti
           <div className={`rounded-xl border p-4 ${isVerified ? 'bg-zinc-50 border-zinc-200' : 'bg-white border-zinc-200'}`}>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${isVerified ? 'bg-zinc-100' : 'bg-zinc-100'}`}>
-                  <svg className={`w-5 h-5 ${isVerified ? 'text-zinc-600' : 'text-zinc-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${isVerified ? 'bg-zinc-900' : 'bg-zinc-200'}`}>
+                  <svg className={`w-5 h-5 ${isVerified ? 'text-white' : 'text-zinc-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
                   </svg>
                 </div>
@@ -796,8 +796,8 @@ function DetailRow({ icon, label, children }) {
 
 function DetailRowCard({ icon, label, children }) {
   return (
-    <div className="flex items-center gap-2.5 bg-zinc-50 rounded-lg px-3 py-2">
-      <div className="w-7 h-7 bg-white border border-zinc-200 rounded-md flex items-center justify-center text-zinc-500 flex-shrink-0">
+    <div className="flex items-center gap-3 bg-white border border-zinc-200 rounded-xl px-3 py-2.5">
+      <div className="w-8 h-8 bg-zinc-900 rounded-lg flex items-center justify-center text-white flex-shrink-0">
         {icon}
       </div>
       <div className="min-w-0 flex-1">
@@ -1214,8 +1214,8 @@ function ProfileEditForm({ portfolio, user, onSave, onCancel }) {
           <div className={`rounded-xl border p-5 ${localPortfolio?.paymentVerified ? 'bg-zinc-50 border-zinc-200' : 'bg-white border-zinc-200'}`}>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${localPortfolio?.paymentVerified ? 'bg-zinc-100' : 'bg-zinc-100'}`}>
-                  <svg className={`w-5 h-5 ${localPortfolio?.paymentVerified ? 'text-zinc-600' : 'text-zinc-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${localPortfolio?.paymentVerified ? 'bg-zinc-900' : 'bg-zinc-200'}`}>
+                  <svg className={`w-5 h-5 ${localPortfolio?.paymentVerified ? 'text-white' : 'text-zinc-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
                   </svg>
                 </div>
