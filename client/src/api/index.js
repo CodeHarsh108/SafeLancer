@@ -1,5 +1,11 @@
 import axios from 'axios'
 
+export const getAdminStats = () => api.get('/api/admin/stats');
+export const getPendingFreelancers = () => api.get('/api/admin/freelancers/pending');
+export const verifyFreelancer = (userId, status, adminNote) => 
+  api.post(`/api/admin/freelancers/${userId}/verify`, { status, adminNote });
+export const getAllUsers = () => api.get('/api/admin/users');
+
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || 'http://localhost:5001',
 })

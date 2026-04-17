@@ -64,9 +64,17 @@ export default function FreelancerDashboard() {
       <Navbar />
       <div className="max-w-5xl mx-auto p-6">
         {/* Header */}
+        
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-xl font-semibold text-zinc-900">Welcome, {user.name}</h1>
+            <h1 className="text-xl font-semibold text-zinc-900">
+  Welcome, {user.name}
+  {!user.isVerified && (
+    <span className="ml-2 text-xs bg-red-100 text-red-600 px-2 py-1 rounded">
+      Not Verified
+    </span>
+  )}
+</h1>
             <p className="text-zinc-500 text-sm">Manage your work and earnings</p>
           </div>
           <Link to="/jobs" className="bg-zinc-900 hover:bg-zinc-800 text-white px-4 py-2 rounded-lg font-medium text-sm transition-colors">

@@ -23,7 +23,6 @@ export function calcCompletion(role, p) {
       if (p.yearsHiring) pct += 15
       if (p.linkedinUrl) pct += 10
       if (p.preferredComm) pct += 10
-      if (p.paymentVerified) pct += 10
       return Math.min(100, pct)
     } else if (p.clientType === 'business') {
       let pct = 5
@@ -37,7 +36,6 @@ export function calcCompletion(role, p) {
       if (p.websiteUrl) pct += 5
       if (p.linkedinUrl) pct += 5
       if (p.preferredComm) pct += 5
-      if (p.paymentVerified) pct += 10
       return Math.min(100, pct)
     } else {
       let pct = 20

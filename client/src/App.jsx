@@ -1,3 +1,5 @@
+import VerificationPending from './pages/verificationpending'
+<Route path="/verification-pending" element={<VerificationPending />} />
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { Toaster } from 'react-hot-toast'
 import ProtectedRoute from './components/ProtectedRoute'
@@ -19,7 +21,6 @@ import VerifyHash from './pages/VerifyHash'
 import AdminDashboard from './pages/AdminDashboard'
 import AuthCallback from './pages/AuthCallback'
 import GoogleComplete from './pages/GoogleComplete'
-import PaymentSettings from './pages/PaymentSettings'
 
 function DashboardRedirect() {
   const user = JSON.parse(localStorage.getItem('user') || '{}')
@@ -62,7 +63,6 @@ export default function App() {
 
         {/* Onboarding */}
         <Route path="/profile/setup" element={<ProtectedRoute><ProfileSetup /></ProtectedRoute>} />
-        <Route path="/payments" element={<ProtectedRoute><PaymentSettings /></ProtectedRoute>} />
 
         {/* Dashboards */}
         <Route path="/dashboard/client" element={<ProtectedRoute role="client"><ClientDashboard /></ProtectedRoute>} />

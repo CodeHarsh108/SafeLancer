@@ -4,7 +4,6 @@ import api from '../api'
 import Navbar from '../components/Navbar'
 import SkillSelector from '../components/SkillSelector'
 import toast from 'react-hot-toast'
-import PaymentVerifyModal from '../components/PaymentVerifyModal'
 import {
   FREELANCER_BADGES, CLIENT_BADGES, BADGE_COLORS,
   computeBadges, storeBadgeSummary
@@ -497,24 +496,6 @@ function ProfileCard({ portfolio, user, fullUser, completion, onEdit, onCompleti
             </a>
           </div>
         )}
-
-        {/* Payment — link to payment settings */}
-        {!isFreelancer && (
-          <div className={`rounded-xl border p-4 flex items-center gap-3 ${isVerified ? 'bg-zinc-50 border-zinc-200' : 'bg-white border-zinc-200'}`}>
-            <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${isVerified ? 'bg-zinc-900' : 'bg-zinc-200'}`}>
-              <svg className={`w-5 h-5 ${isVerified ? 'text-white' : 'text-zinc-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-              </svg>
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-zinc-800">{isVerified ? 'Payment Verified' : 'Payment Not Verified'}</p>
-              <p className="text-xs text-zinc-500 mt-0.5">{isVerified ? 'Your payment method is confirmed' : 'Verify your payment to build trust with freelancers'}</p>
-            </div>
-            <Link to="/payments" className="text-xs bg-zinc-900 hover:bg-zinc-800 text-white font-medium px-3 py-1.5 rounded-lg transition-colors flex-shrink-0">
-              {isVerified ? 'Manage' : 'Verify now'}
-            </Link>
-          </div>
-        )}
       </div>
 
       {/* ── RIGHT: Sidebar ──────────────────────────────────────────── */}
@@ -704,6 +685,19 @@ function ProfileEditForm({ portfolio, user, onSave, onCancel }) {
   const handleAvatarUpload = async (e) => {
     const file = e.target.files[0]
     if (!file) return
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please select an image file (JPG, PNG, GIF, etc.)')
+      return
+    }
+
+    // Validate file size (10MB limit)
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error('File size must be less than 10MB')
+      return
+    }
+
     setAvatarUploading(true)
     const fd = new FormData()
     fd.append('avatar', file)
@@ -719,7 +713,7 @@ function ProfileEditForm({ portfolio, user, onSave, onCancel }) {
       toast.success('Photo uploaded!')
     } catch (err) {
       const msg = err?.response?.data?.message || err?.message || 'Upload failed'
-      toast.error(msg)
+      toast.error(`Upload failed: ${msg}`)
       console.error('Avatar upload error:', err?.response?.data || err?.message)
     }
     finally { setAvatarUploading(false) }

@@ -148,14 +148,6 @@ export const FREELANCER_BADGES = [
 
 export const CLIENT_BADGES = [
   {
-    id: 'payment_verified',
-    icon: BadgeIcons.creditCard,
-    title: 'Payment Verified',
-    description: 'Verify a payment method via Razorpay',
-    condition: (u, p) => !!p?.paymentVerified,
-    color: 'emerald',
-  },
-  {
     id: 'trusted_client',
     icon: BadgeIcons.handshake,
     title: 'Trusted Client',

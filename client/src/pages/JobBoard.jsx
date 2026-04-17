@@ -96,11 +96,6 @@ export default function JobBoard() {
                             {job.experienceLevel}
                           </span>
                         )}
-                        {job.verifiedOnly && (
-                          <span className="text-xs font-medium px-2 py-0.5 rounded-md bg-amber-50 text-amber-700">
-                            Verified Only
-                          </span>
-                        )}
                       </div>
 
                       {/* Category */}

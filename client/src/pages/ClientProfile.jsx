@@ -175,12 +175,6 @@ export default function ClientProfile() {
                       {profile.industry}
                     </span>
                   )}
-                  {profile.paymentVerified && (
-                    <span className="text-xs bg-zinc-100 text-zinc-700 border border-zinc-200 px-2.5 py-1 rounded-full font-medium flex items-center gap-1.5">
-                      {Icons.shield}
-                      Payment Verified
-                    </span>
-                  )}
                   {avgRating && (
                     <span className="flex items-center gap-1 text-zinc-900 font-semibold text-sm">
                       <svg className="w-3.5 h-3.5 fill-zinc-700" viewBox="0 0 20 20">

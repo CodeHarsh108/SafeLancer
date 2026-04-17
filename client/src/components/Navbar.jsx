@@ -84,8 +84,8 @@ export default function Navbar() {
     <div className="sticky top-0 z-50">
       <nav className="bg-white border-b border-zinc-200 px-6 py-3 flex items-center justify-between">
         <Link to={dashboardPath} className="flex items-center gap-2">
-          <span className="text-base font-bold text-zinc-900 tracking-tight">FreeLock</span>
-          <span className="text-[10px] bg-zinc-100 text-zinc-500 px-1.5 py-0.5 rounded font-semibold tracking-wider uppercase">Beta</span>
+          <span className="text-base font-bold text-zinc-900 tracking-tight">Safelancer</span>
+          <span className="text-[10px] bg-zinc-100 text-zinc-500 px-1.5 py-0.5 rounded font-semibold tracking-wider uppercase"></span>
         </Link>
         {user && (
           <div className="flex items-center gap-5">

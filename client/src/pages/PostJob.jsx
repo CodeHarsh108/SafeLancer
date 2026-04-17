@@ -27,7 +27,7 @@ export default function PostJob() {
   const [form, setForm] = useState({
     title: '', description: '', budget: '', deadline: '',
     category: 'Other', experienceLevel: 'Mid',
-    verifiedOnly: false, advancePercent: 10,
+    advancePercent: 10,
     nda: false, ipOwnership: 'client', latePenalty: 0, autoReleaseHours: 72
   })
   const [skills, setSkills] = useState([])
@@ -221,17 +221,6 @@ export default function PostJob() {
               <div>
                 <label className="block text-sm font-medium text-zinc-700 mb-1.5">Required Skills</label>
                 <SkillSelector value={skills} onChange={setSkills} />
-              </div>
-
-              <div className="flex items-center justify-between p-3 bg-zinc-50 rounded-lg border border-zinc-100">
-                <div>
-                  <p className="text-sm font-medium text-zinc-800">Verified Freelancers Only</p>
-                  <p className="text-xs text-zinc-500 mt-0.5">Restrict applications to admin-approved freelancers</p>
-                </div>
-                <button type="button" onClick={() => setForm({ ...form, verifiedOnly: !form.verifiedOnly })}
-                  className={`relative w-11 h-6 rounded-full transition-colors ${form.verifiedOnly ? 'bg-zinc-900' : 'bg-zinc-300'}`}>
-                  <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${form.verifiedOnly ? 'translate-x-5' : 'translate-x-0'}`} />
-                </button>
               </div>
             </div>
           </div>
