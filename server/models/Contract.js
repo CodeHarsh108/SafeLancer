@@ -14,7 +14,8 @@ const contractSchema = new mongoose.Schema({
   status: { type: String, enum: ['pending_advance', 'active', 'completed', 'withdrawn', 'disputed'], default: 'pending_advance' },
   startedAt: { type: Date, default: Date.now },
   completedAt: Date,
-  withdrawnAt: Date
+  withdrawnAt: Date,
+  withdrawnBy: { type: String, enum: ['client', 'freelancer', null], default: null }
 }, { timestamps: true });
 
 contractSchema.pre('save', function(next) {

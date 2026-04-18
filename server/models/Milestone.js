@@ -44,6 +44,7 @@ const milestoneSchema = new mongoose.Schema({
   meetingScheduledAt: Date,
   meetingRoomId: String,
   meetingStatus: { type: String, enum: ['not_scheduled', 'scheduled', 'completed'], default: 'not_scheduled' },
+  fundedAt:           { type: Date, default: null },
   payoutId:           { type: String, default: '' },
   payoutStatus:       { type: String, enum: ['pending', 'processing', 'processed', 'failed', ''], default: '' },
   payoutInitiatedAt:  Date,

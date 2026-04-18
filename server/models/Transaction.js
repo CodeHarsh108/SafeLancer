@@ -7,7 +7,7 @@ const transactionSchema = new mongoose.Schema({
   amount: { type: Number, required: true },
   type: {
     type: String,
-    enum: ['phase_payment', 'advance_payment', 'dispute_release', 'split_payment', 'auto_release'],
+    enum: ['phase_payment', 'advance_payment', 'dispute_release', 'split_payment', 'auto_release', 'withdrawal_penalty', 'withdrawal_advance', 'withdrawal_phase'],
     required: true
   },
   status: { type: String, enum: ['completed', 'pending', 'failed'], default: 'completed' },

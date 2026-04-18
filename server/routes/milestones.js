@@ -98,6 +98,7 @@ router.post('/:id/fund', auth, async (req, res) => {
       milestone.razorpayOrderId = order.id;
     }
 
+    milestone.fundedAt = new Date();
     await milestone.save();
     const updated = await milestoneTransition(milestone._id, 'funded');
 

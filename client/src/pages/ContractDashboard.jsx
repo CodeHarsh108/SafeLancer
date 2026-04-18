@@ -95,6 +95,10 @@ export default function ContractDashboard() {
   const [evidenceForms, setEvidenceForms] = useState({})
   const [expandedDispute, setExpandedDispute] = useState(null)
   const [showConfetti, setShowConfetti] = useState(false)
+  const [showWithdrawModal, setShowWithdrawModal] = useState(false)
+  const [withdrawPreview, setWithdrawPreview] = useState(null)
+  const [withdrawPreviewLoading, setWithdrawPreviewLoading] = useState(false)
+  const [withdrawing, setWithdrawing] = useState(false)
 
   const load = async () => {
     try {
@@ -246,6 +250,35 @@ export default function ContractDashboard() {
     } finally { setActionLoading(null) }
   }
 
+  const openWithdrawModal = async () => {
+    setWithdrawPreviewLoading(true)
+    setShowWithdrawModal(true)
+    try {
+      const { data } = await api.get(`/api/contracts/${id}/withdraw-preview`)
+      setWithdrawPreview(data)
+    } catch (err) {
+      toast.error('Could not load withdrawal details')
+      setShowWithdrawModal(false)
+    } finally {
+      setWithdrawPreviewLoading(false)
+    }
+  }
+
+  const handleWithdraw = async () => {
+    setWithdrawing(true)
+    try {
+      await api.post(`/api/contracts/${id}/withdraw`)
+      setShowWithdrawModal(false)
+      toast.success('Contract withdrawn successfully.')
+      window.dispatchEvent(new Event('payoutsProcessed'))
+      await load()
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Withdrawal failed')
+    } finally {
+      setWithdrawing(false)
+    }
+  }
+
   const releasedCount = milestones.filter(m => m.status === 'released' && !m.isAdvance).length
   const totalPhases = milestones.filter(m => !m.isAdvance).length
   const progress = totalPhases > 0 ? Math.round((releasedCount / totalPhases) * 100) : 0
@@ -298,6 +331,7 @@ export default function ContractDashboard() {
   })()
 
   return (
+    <>
     <div className="min-h-screen">
       <Confetti active={showConfetti} />
       <Navbar />
@@ -904,41 +938,179 @@ export default function ContractDashboard() {
         })}
 
         {/* Contract Withdrawal */}
-        {contract.status === 'active' && user.role === 'client' && (
+        {contract.status === 'active' && (
           <div className="text-center mt-6 pb-2">
-            <button onClick={async () => {
-              const confirmed = window.confirm(
-                'Are you sure you want to exit this contract?\n\n' +
-                '• The advance payment will be released to the freelancer.\n' +
-                '• Funded phase payments will be refunded to you (if work is under 50% complete).'
-              )
-              if (!confirmed) return
-              try {
-                const { data } = await api.post(`/api/contracts/${id}/withdraw`)
-                if (data.allowed) {
-                  if (data.advanceReleased) {
-                    toast.success('Contract closed. Phase funds refunded. Advance payment released to freelancer.')
-                  } else {
-                    toast.success('Contract closed. Funds refunded.')
-                  }
-                  await load()
-                } else {
-                  if (data.advanceReleased) {
-                    toast('Advance payment released to freelancer. ' + data.message, { icon: 'ℹ️' })
-                  } else {
-                    toast.error(data.message)
-                  }
-                }
-              } catch { toast.error('Withdrawal failed') }
-            }} className="text-sm underline underline-offset-2 transition-colors"
+            <button onClick={openWithdrawModal}
+              className="text-sm underline underline-offset-2 transition-colors"
               style={{ color: '#6b5445' }}
-              onMouseEnter={e => e.currentTarget.style.color = '#BFBFBF'}
+              onMouseEnter={e => e.currentTarget.style.color = '#f87171'}
               onMouseLeave={e => e.currentTarget.style.color = '#6b5445'}>
-              Exit Contract Early
+              Withdraw from Contract
             </button>
           </div>
         )}
       </div>
     </div>
+
+    {/* ── Withdrawal Modal ─────────────────────────────────────────── */}
+    {showWithdrawModal && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+        style={{ background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(4px)' }}>
+        <div className="rounded-2xl w-full max-w-md"
+          style={{ background: '#150d06', border: '1px solid rgba(239,68,68,0.25)', boxShadow: '0 24px 64px rgba(0,0,0,0.6)' }}>
+
+          {/* Header */}
+          <div className="px-6 pt-6 pb-4 border-b" style={{ borderColor: 'rgba(239,68,68,0.12)' }}>
+            <div className="flex items-center gap-3 mb-1">
+              <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+                style={{ background: 'rgba(239,68,68,0.12)' }}>
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ color: '#f87171' }}>
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+                </svg>
+              </div>
+              <h2 className="text-base font-bold" style={{ color: '#F5EDE4' }}>Withdraw from Contract</h2>
+            </div>
+            <p className="text-xs" style={{ color: '#6b5445' }}>This action is irreversible. Review the terms carefully.</p>
+          </div>
+
+          {/* Body */}
+          <div className="px-6 py-5">
+            {withdrawPreviewLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <div className="w-6 h-6 border-2 border-t-transparent rounded-full animate-spin" style={{ borderColor: '#FF6803', borderTopColor: 'transparent' }} />
+              </div>
+            ) : withdrawPreview ? (() => {
+              const p = withdrawPreview
+              const fmt = (n) => `₹${Math.round(n).toLocaleString()}`
+              const isClient = user.role === 'client'
+              return (
+                <div className="space-y-4">
+                  {/* Scenario badge */}
+                  <div className="rounded-xl px-4 py-3"
+                    style={{ background: p.past50 ? 'rgba(16,185,129,0.06)' : 'rgba(245,158,11,0.06)', border: `1px solid ${p.past50 ? 'rgba(16,185,129,0.2)' : 'rgba(245,158,11,0.2)'}` }}>
+                    {p.scenario === 1 ? (
+                      <p className="text-sm font-medium" style={{ color: '#f5d76e' }}>
+                        No phases have started yet
+                      </p>
+                    ) : p.allComplete ? (
+                      <p className="text-sm font-medium" style={{ color: '#10b981' }}>
+                        All active phases are complete
+                      </p>
+                    ) : (
+                      <div>
+                        <p className="text-sm font-medium" style={{ color: p.past50 ? '#10b981' : '#f59e0b' }}>
+                          Phase {p.activePhaseNumber}: {p.elapsedPct}% of time elapsed
+                          {p.past50 ? ' — past midpoint' : ' — before midpoint'}
+                        </p>
+                        <div className="mt-2 w-full rounded-full h-1.5 overflow-hidden" style={{ background: 'rgba(255,255,255,0.06)' }}>
+                          <div className="h-1.5 rounded-full transition-all" style={{ width: `${p.elapsedPct}%`, background: p.past50 ? '#10b981' : '#f59e0b' }} />
+                        </div>
+                        <div className="flex justify-between mt-1">
+                          <span className="text-[10px]" style={{ color: '#6b5445' }}>Start</span>
+                          <span className="text-[10px]" style={{ color: '#6b5445' }}>50%</span>
+                          <span className="text-[10px]" style={{ color: '#6b5445' }}>Deadline</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Breakdown rows */}
+                  <div className="space-y-2">
+                    {/* Advance payment */}
+                    {p.advanceFunded && (
+                      <div className="flex items-center justify-between rounded-lg px-3 py-2.5"
+                        style={{ background: 'rgba(18,10,2,0.6)', border: '1px solid rgba(255,104,3,0.1)' }}>
+                        <div>
+                          <p className="text-xs font-medium" style={{ color: '#F5EDE4' }}>Advance Payment</p>
+                          <p className="text-[10px] mt-0.5" style={{ color: '#6b5445' }}>
+                            → {p.advanceGoesTo === 'freelancer' ? 'Released to freelancer' : 'Refunded to client'}
+                          </p>
+                        </div>
+                        <span className="text-sm font-bold" style={{ color: p.advanceGoesTo === 'freelancer' ? '#FF6803' : '#60a5fa' }}>{fmt(p.advanceAmount)}</span>
+                      </div>
+                    )}
+
+                    {/* Phase payment breakdown */}
+                    {p.scenario === 2 && !p.allComplete && p.phaseAmount > 0 && (
+                      <>
+                        {p.past50 ? (
+                          <div className="flex items-center justify-between rounded-lg px-3 py-2.5"
+                            style={{ background: 'rgba(16,185,129,0.06)', border: '1px solid rgba(16,185,129,0.15)' }}>
+                            <div>
+                              <p className="text-xs font-medium" style={{ color: '#10b981' }}>Phase {p.activePhaseNumber} — Full Payment</p>
+                              <p className="text-[10px] mt-0.5" style={{ color: '#6b5445' }}>Work is past midpoint — freelancer receives full amount</p>
+                            </div>
+                            <span className="text-sm font-bold" style={{ color: '#10b981' }}>{fmt(p.phaseAmount)}</span>
+                          </div>
+                        ) : (
+                          <>
+                            {/* Penalty row */}
+                            <div className="flex items-center justify-between rounded-lg px-3 py-2.5"
+                              style={{ background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.15)' }}>
+                              <div>
+                                <p className="text-xs font-medium" style={{ color: '#f87171' }}>
+                                  15% Penalty {isClient ? '(you pay)' : '(deducted from your wallet)'}
+                                </p>
+                                <p className="text-[10px] mt-0.5" style={{ color: '#6b5445' }}>
+                                  {isClient ? '→ Freelancer' : '→ Client'} as compensation
+                                </p>
+                              </div>
+                              <span className="text-sm font-bold" style={{ color: '#f87171' }}>{fmt(p.penalty)}</span>
+                            </div>
+
+                            {/* Refund row */}
+                            {p.phaseRefundToClient > 0 && (
+                              <div className="flex items-center justify-between rounded-lg px-3 py-2.5"
+                                style={{ background: 'rgba(59,130,246,0.06)', border: '1px solid rgba(59,130,246,0.15)' }}>
+                                <div>
+                                  <p className="text-xs font-medium" style={{ color: '#60a5fa' }}>
+                                    {isClient ? '85% Refund (you receive)' : 'Full Refund → Client'}
+                                  </p>
+                                  <p className="text-[10px] mt-0.5" style={{ color: '#6b5445' }}>Phase {p.activePhaseNumber} funds returned</p>
+                                </div>
+                                <span className="text-sm font-bold" style={{ color: '#60a5fa' }}>{fmt(p.phaseRefundToClient)}</span>
+                              </div>
+                            )}
+                          </>
+                        )}
+                      </>
+                    )}
+
+                    {/* No advance, no active phase */}
+                    {!p.advanceFunded && p.phaseAmount === 0 && (
+                      <div className="rounded-lg px-3 py-2.5" style={{ background: 'rgba(18,10,2,0.6)', border: '1px solid rgba(255,104,3,0.08)' }}>
+                        <p className="text-xs" style={{ color: '#6b5445' }}>No funds are currently held. The contract will be closed.</p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Remaining phases note */}
+                  <p className="text-[10px]" style={{ color: '#6b5445' }}>
+                    All unfunded phases will be closed. Previously released payments are unaffected.
+                  </p>
+                </div>
+              )
+            })() : null}
+          </div>
+
+          {/* Footer */}
+          <div className="px-6 pb-6 flex gap-3">
+            <button onClick={() => setShowWithdrawModal(false)} disabled={withdrawing}
+              className="flex-1 rounded-xl py-2.5 text-sm font-semibold transition-colors disabled:opacity-50"
+              style={{ background: 'rgba(255,255,255,0.04)', color: '#BFBFBF', border: '1px solid rgba(255,255,255,0.08)' }}>
+              Cancel
+            </button>
+            <button onClick={handleWithdraw} disabled={withdrawing || withdrawPreviewLoading || !withdrawPreview}
+              className="flex-1 rounded-xl py-2.5 text-sm font-semibold transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+              style={{ background: 'rgba(239,68,68,0.15)', color: '#f87171', border: '1px solid rgba(239,68,68,0.3)' }}>
+              {withdrawing ? (
+                <><div className="w-3.5 h-3.5 border border-current border-t-transparent rounded-full animate-spin" /> Processing…</>
+              ) : 'Confirm Withdrawal'}
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   )
 }

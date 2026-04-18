@@ -20,6 +20,9 @@ const TX_LABEL = {
   dispute_release: 'Dispute Release',
   split_payment: 'Split Payment',
   auto_release: 'Auto Release',
+  withdrawal_penalty: 'Withdrawal Penalty',
+  withdrawal_advance: 'Advance on Withdrawal',
+  withdrawal_phase: 'Phase on Withdrawal',
 }
 
 function StatCard({ label, value, accent }) {
