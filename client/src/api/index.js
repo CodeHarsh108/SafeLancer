@@ -17,6 +17,13 @@ api.interceptors.response.use(
       localStorage.clear()
       window.location.href = '/'
     }
+    if (err.response?.status === 403 && err.response?.data?.banned) {
+      localStorage.setItem('banInfo', JSON.stringify({
+        reason: err.response.data.reason,
+        penaltyDue: err.response.data.penaltyDue
+      }))
+      window.location.href = '/banned'
+    }
     return Promise.reject(err)
   }
 )

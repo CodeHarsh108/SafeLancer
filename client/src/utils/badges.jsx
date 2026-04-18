@@ -167,7 +167,7 @@ export const CLIENT_BADGES = [
     id: 'first_project',
     icon: BadgeIcons.rocket,
     title: 'First Project',
-    description: 'Post your first job on FreeLock',
+    description: 'Post your first job on SafeLancer',
     condition: (u, p) => (p?.projectsPosted || 0) >= 1,
     color: 'blue',
   },

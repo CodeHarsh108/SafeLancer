@@ -10,7 +10,6 @@ const FILE_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5001'
 export default function ClientDashboard() {
   const [contracts, setContracts] = useState([])
   const [jobs, setJobs] = useState([])
-  const [negotiations, setNegotiations] = useState([])
   const [portfolio, setPortfolio] = useState(null)
   const [loading, setLoading] = useState(true)
   const [actionLoading, setActionLoading] = useState(null)
@@ -21,35 +20,71 @@ export default function ClientDashboard() {
     Promise.all([
       api.get('/api/contracts/my-contracts'),
       api.get('/api/jobs/my-jobs'),
-      api.get('/api/negotiations/my-negotiations'),
       api.get('/api/auth/me')
-    ]).then(([c, j, n, me]) => {
+    ]).then(([c, j, me]) => {
       setContracts(c.data)
       setJobs(j.data)
-      setNegotiations(n.data.filter(n => n.status === 'active'))
       setPortfolio(me.data.portfolio)
     }).catch(() => toast.error('Failed to load data'))
       .finally(() => setLoading(false))
   }, [])
 
   const allBids = jobs.flatMap(j => (j.bids || []).map(b => ({ ...b, job: j })))
-  const interviewsToday = allBids.filter(b => {
-    if (b.status !== 'interview_scheduled' || !b.interviewScheduledAt) return false
-    const d = new Date(b.interviewScheduledAt)
-    return d.toDateString() === new Date().toDateString()
-  })
-  const awaitingDecision = allBids.filter(b => b.status === 'interviewed')
-  const activeContracts = contracts.filter(c => c.status === 'active')
+  const awaitingDecision = allBids.filter(b => b.status === 'shortlisted')
+  const activeContracts = contracts.filter(c => ['active', 'pending_advance'].includes(c.status))
   const totalValue = contracts.reduce((sum, c) => sum + (c.amount || 0), 0)
   const openJobs = jobs.filter(j => j.status === 'open')
-  const pendingInterviews = allBids.filter(b => b.status === 'interview_scheduled').length
   const toReview = allBids.filter(b => b.status === 'applied').length
+
+  const handleAdvancePayment = async (advanceMilestone, contractId) => {
+    try {
+      const { data } = await api.post(`/api/milestones/${advanceMilestone._id}/fund`)
+      const isTestMode = !data.razorpayKeyId || data.razorpayKeyId.includes('placeholder') || data.razorpayOrderId?.startsWith('order_test_')
+      if (isTestMode) {
+        toast.success('Advance payment secured! Project is now active.')
+        navigate(`/contracts/${contractId}`)
+        return
+      }
+      const options = {
+        key: data.razorpayKeyId,
+        amount: Math.round(advanceMilestone.amount * 100),
+        currency: 'INR',
+        name: 'SafeLancer Escrow',
+        description: advanceMilestone.title,
+        order_id: data.razorpayOrderId,
+        handler: async (response) => {
+          try {
+            await api.post(`/api/milestones/${advanceMilestone._id}/verify-payment`, {
+              razorpay_order_id: response.razorpay_order_id,
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_signature: response.razorpay_signature,
+            })
+            toast.success('Advance payment secured! Project is now active.')
+            navigate(`/contracts/${contractId}`)
+          } catch { toast.error('Payment verification failed.') }
+        },
+        prefill: { name: user.name, email: user.email },
+        theme: { color: '#09090b' },
+        modal: { ondismiss: () => toast('Payment cancelled. Go to the contract to complete advance payment.') }
+      }
+      const rzp = new window.Razorpay(options)
+      rzp.on('payment.failed', (response) => toast.error(`Payment failed: ${response.error.description}`))
+      rzp.open()
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to initiate advance payment')
+    }
+  }
 
   const quickAction = async (jobId, bidId, endpoint) => {
     setActionLoading(bidId + endpoint)
     try {
       const { data } = await api.patch(`/api/jobs/${jobId}/applications/${bidId}/${endpoint}`)
-      if (endpoint === 'negotiate') { navigate(`/negotiations/${data.negotiationId}`); return }
+      if (endpoint === 'hire') {
+        setJobs(prev => prev.map(j => j._id !== jobId ? j : (data.job || j)))
+        toast('Freelancer hired! Complete the advance payment to activate the project.')
+        await handleAdvancePayment(data.advanceMilestone, data.contract._id)
+        return
+      }
       setJobs(prev => prev.map(j => j._id !== jobId ? j : (data.job || data)))
       toast.success('Done')
     } catch (err) {
@@ -130,7 +165,7 @@ export default function ClientDashboard() {
             { label: 'Active Contracts', value: activeContracts.length },
             { label: 'Total Value', value: `₹${totalValue.toLocaleString()}` },
             { label: 'Open Jobs', value: openJobs.length },
-            { label: 'Interviews', value: pendingInterviews },
+            { label: 'Shortlisted', value: awaitingDecision.length },
             { label: 'To Review', value: toReview },
           ].map(s => (
             <div key={s.label} className="bg-white rounded-xl border border-zinc-200 p-4">
@@ -140,38 +175,10 @@ export default function ClientDashboard() {
           ))}
         </div>
 
-        {/* Interviews Today */}
-        {interviewsToday.length > 0 && (
-          <section className="mb-6">
-            <h2 className="text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-3">Interviews Today</h2>
-            {interviewsToday.map(b => (
-              <div key={b._id} className="bg-white rounded-xl border border-zinc-200 p-4 mb-2 flex items-center gap-4">
-                <div className="w-10 h-10 bg-zinc-900 rounded-xl flex items-center justify-center text-white flex-shrink-0">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.069A1 1 0 0121 8.867v6.266a1 1 0 01-1.447.894L15 14M3 8a2 2 0 012-2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z" />
-                  </svg>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="font-semibold text-sm text-zinc-900">{b.freelancer?.name}</div>
-                  <div className="text-sm text-zinc-500">
-                    {b.job.title} · {new Date(b.interviewScheduledAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                  </div>
-                </div>
-                <Link
-                  to={`/interview/${b.meetingRoomId}?job=${encodeURIComponent(b.job.title)}&jobId=${b.job._id}&bidId=${b._id}`}
-                  className="bg-zinc-900 hover:bg-zinc-800 text-white px-4 py-1.5 rounded-lg text-sm font-medium transition-colors flex-shrink-0"
-                >
-                  Join Interview
-                </Link>
-              </div>
-            ))}
-          </section>
-        )}
-
         {/* Awaiting Decision */}
         {awaitingDecision.length > 0 && (
           <section className="mb-6">
-            <h2 className="text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-3">Awaiting Your Decision</h2>
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-3">Shortlisted — Awaiting Decision</h2>
             {awaitingDecision.map(b => {
               const isLoading = (suf) => actionLoading === b._id + suf
               return (
@@ -189,10 +196,6 @@ export default function ClientDashboard() {
                     <button onClick={() => quickAction(b.job._id, b._id, 'hire')} disabled={isLoading('hire')}
                       className="bg-zinc-900 hover:bg-zinc-800 text-white px-3 py-1.5 rounded-lg text-sm font-medium disabled:opacity-50">
                       {isLoading('hire') ? '...' : 'Hire'}
-                    </button>
-                    <button onClick={() => quickAction(b.job._id, b._id, 'negotiate')} disabled={isLoading('negotiate')}
-                      className="border border-zinc-200 bg-white hover:bg-zinc-50 text-zinc-700 px-3 py-1.5 rounded-lg text-sm font-medium disabled:opacity-50">
-                      {isLoading('negotiate') ? '...' : 'Negotiate'}
                     </button>
                     <button onClick={() => quickAction(b.job._id, b._id, 'reject')} disabled={isLoading('reject')}
                       className="border border-zinc-200 bg-white hover:bg-zinc-50 text-zinc-500 px-3 py-1.5 rounded-lg text-sm font-medium disabled:opacity-50">
@@ -229,29 +232,6 @@ export default function ClientDashboard() {
           }
         </section>
 
-        {/* Open Negotiations */}
-        {negotiations.length > 0 && (
-          <section className="mb-6">
-            <h2 className="text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-3">Open Negotiations</h2>
-            {negotiations.map(n => (
-              <div key={n._id} className="bg-white rounded-xl border border-zinc-200 p-4 mb-2 flex items-center gap-4">
-                <div className="w-10 h-10 bg-zinc-900 rounded-xl flex items-center justify-center text-white flex-shrink-0">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
-                  </svg>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="font-semibold text-sm text-zinc-900">{n.job?.title}</div>
-                  <div className="text-sm text-zinc-500">Round {n.currentRound}/{n.maxRounds} · with {n.freelancer?.name}</div>
-                </div>
-                <Link to={`/negotiations/${n._id}`} className="border border-zinc-200 bg-white hover:bg-zinc-50 text-zinc-700 px-4 py-1.5 rounded-lg text-sm font-medium transition-colors flex-shrink-0">
-                  View
-                </Link>
-              </div>
-            ))}
-          </section>
-        )}
-
         {/* Posted Jobs */}
         <section>
           <h2 className="text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-3">My Posted Jobs</h2>
@@ -265,7 +245,6 @@ export default function ClientDashboard() {
               const counts = {
                 applied: bids.filter(b => b.status === 'applied').length,
                 shortlisted: bids.filter(b => b.status === 'shortlisted').length,
-                interview: bids.filter(b => b.status === 'interview_scheduled').length,
                 hired: bids.filter(b => b.status === 'hired').length,
               }
               return (
@@ -281,7 +260,6 @@ export default function ClientDashboard() {
                     <div className="flex gap-3 mt-1.5 text-xs text-zinc-400">
                       {counts.applied > 0 && <span>{counts.applied} applied</span>}
                       {counts.shortlisted > 0 && <span className="text-zinc-600">{counts.shortlisted} shortlisted</span>}
-                      {counts.interview > 0 && <span className="text-zinc-600">{counts.interview} interview</span>}
                       {counts.hired > 0 && <span className="text-zinc-700">{counts.hired} hired</span>}
                       {bids.length === 0 && <span>No applications yet</span>}
                     </div>

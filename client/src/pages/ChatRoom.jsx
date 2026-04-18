@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams, useNavigate } from 'react-router-dom'
 import { io } from 'socket.io-client'
 import SimplePeer from 'simple-peer/simplepeer.min.js'
 import api from '../api'
@@ -10,6 +10,7 @@ const SOCKET_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001'
 
 export default function ChatRoom() {
   const { contractId } = useParams()
+  const navigate = useNavigate()
   const user = JSON.parse(localStorage.getItem('user') || '{}')
   const token = localStorage.getItem('token')
 
@@ -208,6 +209,10 @@ export default function ChatRoom() {
       <Navbar />
 
       <div className="max-w-5xl mx-auto w-full p-4 flex-1 flex flex-col gap-4">
+        <button onClick={() => navigate(-1)} className="flex items-center gap-1.5 text-sm text-zinc-500 hover:text-zinc-900 font-medium transition-colors self-start">
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+          Back
+        </button>
 
         {/* Video Call Panel */}
         {callState !== 'idle' && (

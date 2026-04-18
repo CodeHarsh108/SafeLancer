@@ -23,7 +23,7 @@ export default function VerifyHash() {
   return (
     <div className="min-h-screen bg-zinc-100 flex flex-col items-center justify-center p-4">
       <div className="mb-8 text-center">
-        <div className="text-xl font-bold text-zinc-900 tracking-tight">FreeLock</div>
+        <div className="text-xl font-bold text-zinc-900 tracking-tight">SafeLancer</div>
         <div className="text-sm text-zinc-500 mt-1">Delivery Verification</div>
       </div>
 
@@ -36,7 +36,7 @@ export default function VerifyHash() {
         </h1>
         <p className="text-zinc-500 text-sm mb-6">
           {result?.verified
-            ? 'This file was cryptographically recorded as delivered on FreeLock.'
+            ? 'This file was cryptographically recorded as delivered on SafeLancer.'
             : 'This hash does not match any recorded delivery on the platform.'}
         </p>
 
@@ -68,7 +68,7 @@ export default function VerifyHash() {
           </>
         )}
         <div className="mt-6">
-          <a href="/" className="text-zinc-500 hover:text-zinc-900 text-sm underline underline-offset-2">← Back to FreeLock</a>
+          <a href="/" className="text-zinc-500 hover:text-zinc-900 text-sm underline underline-offset-2">← Back to SafeLancer</a>
         </div>
       </div>
     </div>

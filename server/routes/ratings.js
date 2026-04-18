@@ -25,12 +25,11 @@ router.post('/submit', auth, async (req, res) => {
     });
     await rating.save();
 
-    // Recalculate rolling average for ratedUser
+    // Recalculate rolling average for ratedUser (totalJobsCompleted is managed by checkAndCompleteContract)
     const allRatings = await Rating.find({ ratedUser: ratedUserId });
     const avg = allRatings.reduce((sum, r) => sum + r.stars, 0) / allRatings.length;
     await User.findByIdAndUpdate(ratedUserId, {
-      rating: Math.round(avg * 10) / 10,
-      totalJobsCompleted: allRatings.length
+      rating: Math.round(avg * 10) / 10
     });
 
     res.status(201).json(rating);

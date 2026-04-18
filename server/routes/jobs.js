@@ -4,7 +4,6 @@ const crypto = require('crypto');
 const Job = require('../models/Job');
 const Contract = require('../models/Contract');
 const Milestone = require('../models/Milestone');
-const Negotiation = require('../models/Negotiation');
 const auth = require('../middleware/auth');
 
 // Helper: generate milestones from contract + job phases
@@ -40,6 +39,7 @@ async function createMilestonesForContract(contract, phases = [], advancePercent
         : Math.round(remaining * phase.budgetPercent / 100);
       allocated += phaseAmount;
 
+      const phaseDeadline = phase.phaseDeadline || new Date(now.getTime() + (days / phases.length) * (i + 1) * 24 * 60 * 60 * 1000);
       milestones.push({
         contract: contract._id,
         client: contract.client,
@@ -49,8 +49,10 @@ async function createMilestonesForContract(contract, phases = [], advancePercent
         title: phase.title,
         description: `${phase.guideline}\n\nDeliverable: ${phase.deliverableType || 'Other'}`,
         amount: phaseAmount,
-        deadline: phase.phaseDeadline || new Date(now.getTime() + (days / phases.length) * (i + 1) * 24 * 60 * 60 * 1000),
-        status: 'pending_deposit'
+        deadline: phaseDeadline,
+        originalDeadline: phaseDeadline,
+        status: 'pending_deposit',
+        maxRevisions: phase.maxRevisions || 2
       });
     });
   } else {
@@ -59,6 +61,7 @@ async function createMilestonesForContract(contract, phases = [], advancePercent
     const daysPerPhase = Math.round(days / count);
 
     for (let i = 1; i <= count; i++) {
+      const phaseDeadline = new Date(now.getTime() + daysPerPhase * i * 24 * 60 * 60 * 1000);
       milestones.push({
         contract: contract._id,
         client: contract.client,
@@ -68,8 +71,10 @@ async function createMilestonesForContract(contract, phases = [], advancePercent
         title: `Phase ${i}`,
         description: contract.scope ? `Phase ${i} of: ${contract.scope}` : `Phase ${i}`,
         amount: i === count ? (remaining - phaseAmount * (count - 1)) : phaseAmount,
-        deadline: new Date(now.getTime() + daysPerPhase * i * 24 * 60 * 60 * 1000),
-        status: 'pending_deposit'
+        deadline: phaseDeadline,
+        originalDeadline: phaseDeadline,
+        status: 'pending_deposit',
+        maxRevisions: 2
       });
     }
   }
@@ -91,14 +96,13 @@ router.post('/', auth, async (req, res) => {
     const {
       title, description, budget, skills, deadline,
       category, experienceLevel, verifiedOnly, advancePercent,
-      phases, referenceFiles, nda, ipOwnership, latePenalty, autoReleaseHours
+      phases, referenceFiles
     } = req.body;
 
     // Validate budget and deadline
     if (!budget || Number(budget) < 1000) return res.status(400).json({ message: 'Budget must be at least ₹1000' });
     const deadlineDate = new Date(deadline);
-    const minDeadline = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-    if (deadlineDate < minDeadline) return res.status(400).json({ message: 'Deadline must be at least 7 days from today' });
+    if (deadlineDate < new Date()) return res.status(400).json({ message: 'Deadline must be in the future' });
 
     // Validate phases
     if (!phases || phases.length < 3) return res.status(400).json({ message: 'At least 3 phases are required' });
@@ -120,12 +124,11 @@ router.post('/', auth, async (req, res) => {
       verifiedOnly: verifiedOnly || false,
       advancePercent: advancePercent || 10,
       scopeHash,
-      phases: phases || [],
-      referenceFiles: referenceFiles || [],
-      nda: nda || false,
-      ipOwnership: ipOwnership || 'client',
-      latePenalty: latePenalty || 0,
-      autoReleaseHours: autoReleaseHours || 72
+      phases: (phases || []).map(p => ({
+        ...p,
+        guidelineHash: crypto.createHash('sha256').update(p.guideline || '').digest('hex')
+      })),
+      referenceFiles: referenceFiles || []
     });
     await job.save();
 
@@ -141,10 +144,16 @@ router.get('/', async (req, res) => {
   try {
     const { skills, minBudget, maxBudget, search, category, experienceLevel } = req.query;
     const query = { status: 'open' };
-    if (skills) query.skills = { $in: skills.split(',').map(s => s.trim()) };
+    if (skills) {
+      const terms = skills.split(',').map(s => s.trim()).filter(Boolean);
+      if (terms.length) query.skills = { $in: terms.map(s => new RegExp(s, 'i')) };
+    }
     if (minBudget) query.budget = { ...query.budget, $gte: Number(minBudget) };
     if (maxBudget) query.budget = { ...query.budget, $lte: Number(maxBudget) };
-    if (search) query.title = { $regex: search, $options: 'i' };
+    if (search) query.$or = [
+      { title: { $regex: search, $options: 'i' } },
+      { description: { $regex: search, $options: 'i' } }
+    ];
     if (category) query.category = category;
     if (experienceLevel) query.experienceLevel = experienceLevel;
 
@@ -167,6 +176,52 @@ router.get('/my-jobs', auth, async (req, res) => {
   }
 });
 
+// GET /api/jobs/freelancers/browse
+router.get('/freelancers/browse', async (req, res) => {
+  try {
+    const { skills, minRating, availability, search } = req.query;
+    const Portfolio = require('../models/Portfolio');
+    const User = require('../models/User');
+
+    let portfolioFilter = { role: 'freelancer', isVisible: true };
+
+    // Skills: case-insensitive regex match against each skill in array
+    if (skills) {
+      const skillTerms = skills.split(',').map(s => s.trim()).filter(Boolean);
+      if (skillTerms.length) {
+        portfolioFilter.skills = { $in: skillTerms.map(s => new RegExp(s, 'i')) };
+      }
+    }
+
+    if (availability) portfolioFilter.availability = availability;
+
+    // Name search: find matching user IDs first, then filter portfolios
+    let userIdMatch = null;
+    if (search && search.trim()) {
+      const matchingUsers = await User.find({ name: { $regex: search.trim(), $options: 'i' } }).select('_id');
+      userIdMatch = matchingUsers.map(u => u._id);
+    }
+
+    if (userIdMatch !== null) {
+      portfolioFilter.user = { $in: userIdMatch };
+    }
+
+    const portfolios = await Portfolio.find(portfolioFilter).populate({
+      path: 'user',
+      select: 'name rating totalJobsCompleted onTimeDeliveryRate',
+      match: minRating ? { rating: { $gte: Number(minRating) } } : {}
+    });
+
+    const results = portfolios
+      .filter(p => p.user !== null)
+      .sort((a, b) => (b.user.rating || 0) - (a.user.rating || 0));
+
+    res.json(results);
+  } catch (err) {
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+});
+
 // GET /api/jobs/my-applications — freelancer sees all their applications
 router.get('/my-applications', auth, async (req, res) => {
   try {
@@ -180,25 +235,20 @@ router.get('/my-applications', auth, async (req, res) => {
     for (const job of jobs) {
       const bid = job.bids.find(b => b.freelancer.toString() === req.user.id);
       if (!bid) continue;
+      // Skip bids with legacy statuses that no longer exist in the pipeline
+      if (['negotiating', 'interview_scheduled', 'interviewed'].includes(bid.status)) continue;
 
       let contractId = null;
-      let negotiationId = null;
 
       if (bid.status === 'hired') {
         const contract = await Contract.findOne({ job: job._id, freelancer: req.user.id });
         if (contract) contractId = contract._id;
       }
 
-      if (bid.status === 'negotiating') {
-        const neg = await Negotiation.findOne({ job: job._id, freelancer: req.user.id, status: 'active' });
-        if (neg) negotiationId = neg._id;
-      }
-
       results.push({
         job: { _id: job._id, title: job.title, budget: job.budget, client: job.client, category: job.category, experienceLevel: job.experienceLevel },
         bid: bid.toObject(),
-        contractId,
-        negotiationId
+        contractId
       });
     }
 
@@ -232,11 +282,6 @@ router.post('/:id/apply', auth, async (req, res) => {
     }
     const job = await Job.findById(req.params.id);
     if (!job || job.status !== 'open') return res.status(400).json({ message: 'Job not available' });
-
-    // Check verifiedOnly
-    if (job.verifiedOnly && !portfolio.paymentVerified) {
-      return res.status(403).json({ message: 'This job requires a verified freelancer. Please complete payment verification.' });
-    }
 
     const already = job.bids.find(b => b.freelancer.toString() === req.user.id);
     if (already) return res.status(400).json({ message: 'Already applied' });
@@ -302,48 +347,13 @@ router.patch('/:id/applications/:bidId/shortlist', auth, async (req, res) => {
   }
 });
 
-// PATCH .../schedule-interview
-router.patch('/:id/applications/:bidId/schedule-interview', auth, async (req, res) => {
-  try {
-    const result = await getJobAndBid(req, res);
-    if (!result) return;
-    const { job, bid } = result;
-    if (bid.status !== 'shortlisted') return res.status(400).json({ message: 'Can only schedule interview for shortlisted candidates' });
-    if (!req.body.scheduledAt) return res.status(400).json({ message: 'scheduledAt is required' });
-    if (new Date(req.body.scheduledAt) <= new Date()) return res.status(400).json({ message: 'Interview must be scheduled in the future' });
-    bid.interviewScheduledAt = new Date(req.body.scheduledAt);
-    bid.meetingRoomId = 'interview-' + crypto.randomUUID();
-    bid.status = 'interview_scheduled';
-    await job.save();
-    res.json(job);
-  } catch (err) {
-    res.status(500).json({ message: 'Server error', error: err.message });
-  }
-});
-
-// PATCH .../interview-done
-router.patch('/:id/applications/:bidId/interview-done', auth, async (req, res) => {
-  try {
-    const result = await getJobAndBid(req, res);
-    if (!result) return;
-    const { job, bid } = result;
-    if (bid.status !== 'interview_scheduled') return res.status(400).json({ message: 'Interview must be scheduled first' });
-    bid.status = 'interviewed';
-    bid.interviewDoneAt = new Date();
-    await job.save();
-    res.json(job);
-  } catch (err) {
-    res.status(500).json({ message: 'Server error', error: err.message });
-  }
-});
-
-// PATCH .../hire — direct hire using job phases
+// PATCH .../hire — shortlisted → hired, creates contract + milestones
 router.patch('/:id/applications/:bidId/hire', auth, async (req, res) => {
   try {
     const result = await getJobAndBid(req, res);
     if (!result) return;
     const { job, bid } = result;
-    if (bid.status !== 'interviewed') return res.status(400).json({ message: 'Can only hire after interview' });
+    if (bid.status !== 'shortlisted') return res.status(400).json({ message: 'Can only hire shortlisted candidates' });
 
     const advancePercent = job.advancePercent || 10;
     const contract = new Contract({
@@ -355,12 +365,13 @@ router.patch('/:id/applications/:bidId/hire', auth, async (req, res) => {
       timeline: 30,
       milestoneCount: job.phases?.length || 3,
       advancePercent,
-      status: 'active'
+      status: 'pending_advance'
     });
     await contract.save();
 
     await createMilestonesForContract(contract, job.phases || [], advancePercent);
 
+    // Mark bid as hired, reject others — job stays 'open' until advance is paid
     job.bids.forEach(b => {
       if (b._id.toString() === bid._id.toString()) {
         b.status = 'hired';
@@ -369,49 +380,11 @@ router.patch('/:id/applications/:bidId/hire', auth, async (req, res) => {
         b.status = 'rejected';
       }
     });
-    job.status = 'in_progress';
     await job.save();
 
-    res.json({ contract, job });
-  } catch (err) {
-    res.status(500).json({ message: 'Server error', error: err.message });
-  }
-});
+    const advanceMilestone = await Milestone.findOne({ contract: contract._id, isAdvance: true });
 
-// PATCH .../negotiate
-router.patch('/:id/applications/:bidId/negotiate', auth, async (req, res) => {
-  try {
-    const result = await getJobAndBid(req, res);
-    if (!result) return;
-    const { job, bid } = result;
-    if (bid.status !== 'interviewed') return res.status(400).json({ message: 'Can only negotiate after interview' });
-
-    const negotiation = new Negotiation({
-      job: job._id,
-      client: job.client,
-      freelancer: bid.freelancer,
-      status: 'active',
-      currentRound: 1,
-      maxRounds: 4,
-      expiresAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
-      rounds: [{
-        roundNumber: 1,
-        proposedBy: req.user.id,
-        proposedByRole: 'client',
-        amount: job.budget,
-        timeline: 30,
-        scope: job.description,
-        milestoneCount: job.phases?.length || 3,
-        message: req.body.message || 'Starting negotiation from interview.',
-        status: 'pending'
-      }]
-    });
-    await negotiation.save();
-
-    bid.status = 'negotiating';
-    await job.save();
-
-    res.json({ negotiationId: negotiation._id, job });
+    res.json({ contract, job, advanceMilestone });
   } catch (err) {
     res.status(500).json({ message: 'Server error', error: err.message });
   }
@@ -427,32 +400,6 @@ router.patch('/:id/applications/:bidId/reject', auth, async (req, res) => {
     if (req.body.reason) bid.rejectionReason = req.body.reason;
     await job.save();
     res.json(job);
-  } catch (err) {
-    res.status(500).json({ message: 'Server error', error: err.message });
-  }
-});
-
-// GET /api/jobs/freelancers/browse
-router.get('/freelancers/browse', async (req, res) => {
-  try {
-    const { skills, minRating, availability } = req.query;
-    const Portfolio = require('../models/Portfolio');
-
-    let portfolioFilter = { role: 'freelancer', isVisible: true };
-    if (skills) portfolioFilter.skills = { $in: skills.split(',').map(s => s.trim()) };
-    if (availability) portfolioFilter.availability = availability;
-
-    const portfolios = await Portfolio.find(portfolioFilter).populate({
-      path: 'user',
-      select: 'name rating totalJobsCompleted onTimeDeliveryRate',
-      match: minRating ? { rating: { $gte: Number(minRating) } } : {}
-    });
-
-    const results = portfolios
-      .filter(p => p.user !== null)
-      .sort((a, b) => (b.user.rating || 0) - (a.user.rating || 0));
-
-    res.json(results);
   } catch (err) {
     res.status(500).json({ message: 'Server error', error: err.message });
   }

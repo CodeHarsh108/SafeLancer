@@ -44,12 +44,12 @@ export default function GoogleComplete() {
     <div className="min-h-screen bg-zinc-100 flex flex-col items-center justify-center p-4">
 
       <div className="mb-8 text-center">
-        <div className="text-xl font-bold text-zinc-900 tracking-tight">FreeLock</div>
+        <div className="text-xl font-bold text-zinc-900 tracking-tight">SafeLancer</div>
         <div className="text-sm text-zinc-500 mt-1">One last step</div>
       </div>
 
       <div className="bg-white rounded-xl border border-zinc-200 p-8 w-full max-w-sm shadow-sm">
-        <h1 className="text-base font-semibold text-zinc-900 mb-1">How will you use FreeLock?</h1>
+        <h1 className="text-base font-semibold text-zinc-900 mb-1">How will you use SafeLancer?</h1>
         <p className="text-sm text-zinc-500 mb-6">Choose your role to complete your account setup.</p>
 
         <form onSubmit={handleSubmit} className="space-y-4">

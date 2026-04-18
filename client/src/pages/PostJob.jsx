@@ -8,7 +8,13 @@ import toast from 'react-hot-toast'
 const CATEGORIES = ['Web Development', 'Mobile', 'Design', 'Data Science', 'DevOps', 'Content', 'Other']
 const DELIVERABLE_TYPES = ['Code File', 'Design File', 'Document', 'APK', 'Video', 'Other']
 
-const emptyPhase = () => ({ title: '', guideline: '', deliverableType: 'Other', budgetPercent: '', phaseDeadline: '', maxRevisions: 2 })
+const emptyPhase = () => ({ title: '', guideline: '', guidelineHash: '', deliverableType: 'Other', budgetPercent: '', phaseDeadline: '', maxRevisions: 2 })
+
+async function sha256(text) {
+  if (!text) return ''
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text))
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('')
+}
 
 const SectionHeader = ({ num, title, subtitle }) => (
   <div className="flex items-center gap-3 mb-5">
@@ -20,6 +26,11 @@ const SectionHeader = ({ num, title, subtitle }) => (
   </div>
 )
 
+const todayStr = () => {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
 export default function PostJob() {
   const navigate = useNavigate()
   const fileInputRef = useRef(null)
@@ -27,8 +38,7 @@ export default function PostJob() {
   const [form, setForm] = useState({
     title: '', description: '', budget: '', deadline: '',
     category: 'Other', experienceLevel: 'Mid',
-    verifiedOnly: false, advancePercent: 10,
-    nda: false, ipOwnership: 'client', latePenalty: 0, autoReleaseHours: 72
+    advancePercent: 10
   })
   const [skills, setSkills] = useState([])
   const [phases, setPhases] = useState([emptyPhase(), emptyPhase(), emptyPhase()])
@@ -46,7 +56,9 @@ export default function PostJob() {
     }).catch(() => {})
   }, [])
 
-  const totalPercent = phases.reduce((sum, p) => sum + Number(p.budgetPercent || 0), 0)
+  const otherPhasesPercent = phases.slice(0, -1).reduce((sum, p) => sum + Number(p.budgetPercent || 0), 0)
+  const lastPhasePercent = Math.max(0, 100 - otherPhasesPercent)
+  const totalPercent = otherPhasesPercent + lastPhasePercent
   const budget = Number(form.budget) || 0
   const advanceAmount = Math.round(budget * form.advancePercent / 100)
   const remaining = budget - advanceAmount
@@ -55,6 +67,15 @@ export default function PostJob() {
     const updated = [...phases]
     updated[i] = { ...updated[i], [field]: value }
     setPhases(updated)
+    if (field === 'guideline') {
+      sha256(value).then(hash => {
+        setPhases(prev => {
+          const next = [...prev]
+          next[i] = { ...next[i], guidelineHash: hash }
+          return next
+        })
+      })
+    }
   }
 
   const addPhase = () => setPhases([...phases, emptyPhase()])
@@ -87,17 +108,15 @@ export default function PostJob() {
     if (!form.budget || budget < 1000) e.budget = 'Minimum ₹1,000'
     if (!form.deadline) {
       e.deadline = 'Required'
-    } else {
-      const minDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
-      if (new Date(form.deadline) < minDate) e.deadline = 'Must be at least 7 days from today'
     }
     phases.forEach((p, i) => {
+      const isLast = i === phases.length - 1
       if (!p.title.trim()) e[`phase_${i}_title`] = 'Required'
       if (!p.guideline.trim() || p.guideline.length < 20) e[`phase_${i}_guideline`] = 'Min 20 chars'
-      if (!p.budgetPercent || Number(p.budgetPercent) <= 0) e[`phase_${i}_budget`] = 'Required'
-      if (!p.phaseDeadline) e[`phase_${i}_deadline`] = 'Required'
+      if (!isLast && (!p.budgetPercent || Number(p.budgetPercent) <= 0)) e[`phase_${i}_budget`] = 'Required'
+      if (!isLast && !p.phaseDeadline) e[`phase_${i}_deadline`] = 'Required'
     })
-    if (Math.abs(totalPercent - 100) > 0.5) e.phasesTotal = `Phase % must total 100% (currently ${totalPercent}%)`
+    if (lastPhasePercent <= 0) e.phasesTotal = `Other phases already total 100% — reduce them to leave budget for the last phase`
     setErrors(e)
     return Object.keys(e).length === 0
   }
@@ -114,7 +133,14 @@ export default function PostJob() {
         ...form,
         budget: budget,
         skills,
-        phases: phases.map(p => ({ ...p, budgetPercent: Number(p.budgetPercent) })),
+        phases: phases.map((p, i) => {
+          const isLast = i === phases.length - 1
+          return {
+            ...p,
+            budgetPercent: isLast ? lastPhasePercent : Number(p.budgetPercent),
+            phaseDeadline: isLast ? form.deadline : p.phaseDeadline
+          }
+        }),
         referenceFiles
       })
       toast.success('Job posted successfully!')
@@ -133,6 +159,10 @@ export default function PostJob() {
     <div className="min-h-screen bg-zinc-100">
       <Navbar />
       <div className="max-w-3xl mx-auto p-6">
+        <button onClick={() => navigate(-1)} className="flex items-center gap-1.5 text-sm text-zinc-500 hover:text-zinc-900 font-medium mb-4 transition-colors">
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+          Back
+        </button>
         <div className="mb-5">
           <h1 className="text-xl font-semibold text-zinc-900">Post a New Job</h1>
           <p className="text-sm text-zinc-500 mt-1">Define your project phases upfront — freelancers see the full scope before applying</p>
@@ -211,8 +241,13 @@ export default function PostJob() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-zinc-700 mb-1.5">Overall Deadline</label>
-                  <input type="date" value={form.deadline} onChange={e => setForm({ ...form, deadline: e.target.value })}
-                    min={new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]}
+                  <input type="date" value={form.deadline}
+                    onChange={e => {
+                      const val = e.target.value
+                      if (val && val < todayStr()) return
+                      setForm({ ...form, deadline: val })
+                    }}
+                    min={todayStr()}
                     className={inp('deadline')} />
                   {errors.deadline && <p className="text-red-500 text-xs mt-1">{errors.deadline}</p>}
                 </div>
@@ -220,19 +255,9 @@ export default function PostJob() {
 
               <div>
                 <label className="block text-sm font-medium text-zinc-700 mb-1.5">Required Skills</label>
-                <SkillSelector value={skills} onChange={setSkills} />
+                <SkillSelector selected={skills} onChange={setSkills} />
               </div>
 
-              <div className="flex items-center justify-between p-3 bg-zinc-50 rounded-lg border border-zinc-100">
-                <div>
-                  <p className="text-sm font-medium text-zinc-800">Verified Freelancers Only</p>
-                  <p className="text-xs text-zinc-500 mt-0.5">Restrict applications to admin-approved freelancers</p>
-                </div>
-                <button type="button" onClick={() => setForm({ ...form, verifiedOnly: !form.verifiedOnly })}
-                  className={`relative w-11 h-6 rounded-full transition-colors ${form.verifiedOnly ? 'bg-zinc-900' : 'bg-zinc-300'}`}>
-                  <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${form.verifiedOnly ? 'translate-x-5' : 'translate-x-0'}`} />
-                </button>
-              </div>
             </div>
           </div>
 
@@ -293,11 +318,18 @@ export default function PostJob() {
             )}
 
             <div className="space-y-4">
-              {phases.map((phase, i) => (
+              {phases.map((phase, i) => {
+                const isLast = i === phases.length - 1
+                const displayBudget = isLast ? String(lastPhasePercent) : phase.budgetPercent
+                const displayDeadline = isLast ? (form.deadline || '') : phase.phaseDeadline
+                return (
                 <div key={i} className="border border-zinc-200 rounded-xl p-4">
                   <div className="flex items-center justify-between mb-3">
-                    <span className="text-sm font-semibold text-zinc-900">Phase {i + 1}</span>
-                    {phases.length > 3 && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-semibold text-zinc-900">Phase {i + 1}</span>
+                      {isLast && <span className="text-xs bg-zinc-100 text-zinc-500 px-2 py-0.5 rounded-md">Final phase</span>}
+                    </div>
+                    {phases.length > 3 && !isLast && (
                       <button type="button" onClick={() => removePhase(i)}
                         className="text-xs text-red-500 hover:text-red-700 font-medium">Remove</button>
                     )}
@@ -325,6 +357,12 @@ export default function PostJob() {
                       <textarea rows={3} value={phase.guideline} onChange={e => updatePhase(i, 'guideline', e.target.value)}
                         className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none transition-colors ${errors[`phase_${i}_guideline`] ? 'border-red-300 bg-red-50' : 'border-zinc-200 focus:border-zinc-400'}`}
                         placeholder="What exactly must be delivered? What does done look like?" />
+                      {phase.guidelineHash && (
+                        <div className="flex items-center gap-1.5 mt-1.5 px-2 py-1 bg-zinc-50 border border-zinc-100 rounded-md">
+                          <svg className="w-3 h-3 text-zinc-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
+                          <span className="text-[10px] text-zinc-400 font-mono truncate">SHA-256: {phase.guidelineHash}</span>
+                        </div>
+                      )}
                       {errors[`phase_${i}_guideline`] && <p className="text-red-500 text-xs mt-0.5">{errors[`phase_${i}_guideline`]}</p>}
                     </div>
 
@@ -332,19 +370,31 @@ export default function PostJob() {
                       <div>
                         <label className="text-xs font-medium text-zinc-600 mb-1 block">Budget %</label>
                         <div className="relative">
-                          <input type="number" value={phase.budgetPercent} onChange={e => updatePhase(i, 'budgetPercent', e.target.value)}
-                            className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none transition-colors pr-7 ${errors[`phase_${i}_budget`] ? 'border-red-300 bg-red-50' : 'border-zinc-200 focus:border-zinc-400'}`}
+                          <input type="number" value={displayBudget}
+                            onChange={e => !isLast && updatePhase(i, 'budgetPercent', e.target.value)}
+                            readOnly={isLast}
+                            className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none transition-colors pr-7 ${isLast ? 'bg-zinc-50 text-zinc-500 cursor-not-allowed border-zinc-100' : errors[`phase_${i}_budget`] ? 'border-red-300 bg-red-50' : 'border-zinc-200 focus:border-zinc-400'}`}
                             placeholder="30" min="1" max="99" />
                           <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-zinc-400">%</span>
                         </div>
-                        {errors[`phase_${i}_budget`] && <p className="text-red-500 text-xs mt-0.5">{errors[`phase_${i}_budget`]}</p>}
+                        {isLast && <p className="text-xs text-zinc-400 mt-0.5">Auto: remaining {lastPhasePercent}%</p>}
+                        {!isLast && errors[`phase_${i}_budget`] && <p className="text-red-500 text-xs mt-0.5">{errors[`phase_${i}_budget`]}</p>}
                       </div>
                       <div>
                         <label className="text-xs font-medium text-zinc-600 mb-1 block">Phase Deadline</label>
-                        <input type="date" value={phase.phaseDeadline} onChange={e => updatePhase(i, 'phaseDeadline', e.target.value)}
+                        <input type="date" value={displayDeadline}
+                          onChange={e => {
+                            if (isLast) return
+                            const val = e.target.value
+                            if (val && val < todayStr()) return
+                            updatePhase(i, 'phaseDeadline', val)
+                          }}
+                          readOnly={isLast}
+                          min={todayStr()}
                           max={form.deadline || undefined}
-                          className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none transition-colors ${errors[`phase_${i}_deadline`] ? 'border-red-300 bg-red-50' : 'border-zinc-200 focus:border-zinc-400'}`} />
-                        {errors[`phase_${i}_deadline`] && <p className="text-red-500 text-xs mt-0.5">{errors[`phase_${i}_deadline`]}</p>}
+                          className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none transition-colors ${isLast ? 'bg-zinc-50 text-zinc-500 cursor-not-allowed border-zinc-100' : errors[`phase_${i}_deadline`] ? 'border-red-300 bg-red-50' : 'border-zinc-200 focus:border-zinc-400'}`} />
+                        {isLast && <p className="text-xs text-zinc-400 mt-0.5">Auto: matches project deadline</p>}
+                        {!isLast && errors[`phase_${i}_deadline`] && <p className="text-red-500 text-xs mt-0.5">{errors[`phase_${i}_deadline`]}</p>}
                       </div>
                       <div>
                         <label className="text-xs font-medium text-zinc-600 mb-1 block">Max Revisions</label>
@@ -357,7 +407,7 @@ export default function PostJob() {
                     </div>
                   </div>
                 </div>
-              ))}
+              )})}
             </div>
 
             <button type="button" onClick={addPhase}
@@ -390,63 +440,9 @@ export default function PostJob() {
             </button>
           </div>
 
-          {/* Section 5: Terms */}
+          {/* Section 5: Review & Post */}
           <div className="bg-white rounded-xl border border-zinc-200 p-6">
-            <SectionHeader num="5" title="Project Terms" subtitle="Legal and payment terms visible to all applicants" />
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="p-3 bg-zinc-50 rounded-lg border border-zinc-100">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-zinc-800">NDA Required</p>
-                      <p className="text-xs text-zinc-500 mt-0.5">Non-disclosure agreement</p>
-                    </div>
-                    <button type="button" onClick={() => setForm({ ...form, nda: !form.nda })}
-                      className={`relative w-11 h-6 rounded-full transition-colors ${form.nda ? 'bg-zinc-900' : 'bg-zinc-300'}`}>
-                      <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${form.nda ? 'translate-x-5' : 'translate-x-0'}`} />
-                    </button>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="text-xs font-medium text-zinc-600 mb-1 block">IP Ownership</label>
-                  <select value={form.ipOwnership} onChange={e => setForm({ ...form, ipOwnership: e.target.value })}
-                    className="w-full border border-zinc-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-zinc-400 transition-colors">
-                    <option value="client">Client owns all deliverables</option>
-                    <option value="freelancer">Freelancer retains license</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-xs font-medium text-zinc-600 mb-1 block">Late Penalty % (per phase)</label>
-                  <div className="relative">
-                    <input type="number" value={form.latePenalty} onChange={e => setForm({ ...form, latePenalty: Math.min(30, Math.max(0, Number(e.target.value))) })}
-                      className="w-full border border-zinc-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-zinc-400 transition-colors pr-7"
-                      placeholder="0" min="0" max="30" />
-                    <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-zinc-400">%</span>
-                  </div>
-                  <p className="text-xs text-zinc-400 mt-1">Deducted if phase deadline missed (0 = no penalty)</p>
-                </div>
-
-                <div>
-                  <label className="text-xs font-medium text-zinc-600 mb-1 block">Auto-Release Timer</label>
-                  <select value={form.autoReleaseHours} onChange={e => setForm({ ...form, autoReleaseHours: Number(e.target.value) })}
-                    className="w-full border border-zinc-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-zinc-400 transition-colors">
-                    <option value={48}>48 hours</option>
-                    <option value={72}>72 hours (default)</option>
-                    <option value={168}>7 days</option>
-                  </select>
-                  <p className="text-xs text-zinc-400 mt-1">Auto-release payment if no review action taken</p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Section 6: Review & Post */}
-          <div className="bg-white rounded-xl border border-zinc-200 p-6">
-            <SectionHeader num="6" title="Review & Post" subtitle="Once posted, scope and phase guidelines are locked with a SHA-256 hash" />
+            <SectionHeader num="5" title="Review & Post" subtitle="Once posted, scope and phase guidelines are locked with a SHA-256 hash" />
 
             {form.title && budget > 0 && (
               <div className="mb-5 p-4 bg-zinc-50 rounded-lg border border-zinc-100 space-y-2">
@@ -473,14 +469,6 @@ export default function PostJob() {
                 <div className="flex justify-between text-sm">
                   <span className="text-zinc-500">Phases</span>
                   <span className="font-medium text-zinc-900">{phases.length} phases</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-zinc-500">NDA</span>
-                  <span className="font-medium text-zinc-900">{form.nda ? 'Required' : 'Not required'}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-zinc-500">IP Ownership</span>
-                  <span className="font-medium text-zinc-900">{form.ipOwnership === 'client' ? 'Client' : 'Freelancer'}</span>
                 </div>
               </div>
             )}

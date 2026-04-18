@@ -19,15 +19,6 @@ function getPasswordStrength(password) {
   return { score, label: 'Strong', color: 'bg-emerald-500' }
 }
 
-const GoogleIcon = () => (
-  <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
-    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-    <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/>
-    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-  </svg>
-)
-
 const ROLES = [
   {
     value: 'client',
@@ -53,9 +44,12 @@ const ROLES = [
 
 export default function Register() {
   const navigate = useNavigate()
-  const [step, setStep] = useState('role') // 'role' | 'form'
+  const [step, setStep] = useState('role')
   const [role, setRole] = useState('')
-  const [form, setForm] = useState({ name: '', email: '', password: '', confirmPassword: '' })
+  const [form, setForm] = useState({
+    name: '', email: '', password: '', confirmPassword: '',
+    linkedin: '', github: '', portfolio: ''
+  })
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirm, setShowConfirm] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -87,6 +81,17 @@ export default function Register() {
     if (form.password !== form.confirmPassword) {
       toast.error('Passwords do not match'); return false
     }
+    if (role === 'freelancer') {
+      if (form.linkedin && !form.linkedin.startsWith('https://')) {
+        toast.error('LinkedIn URL must start with https://'); return false
+      }
+      if (form.github && !form.github.startsWith('https://')) {
+        toast.error('GitHub URL must start with https://'); return false
+      }
+      if (form.portfolio && !form.portfolio.startsWith('https://')) {
+        toast.error('Portfolio URL must start with https://'); return false
+      }
+    }
     return true
   }
 
@@ -95,17 +100,31 @@ export default function Register() {
     if (!validate()) return
     setLoading(true)
     try {
-      const { data } = await api.post('/api/auth/register', {
+      const payload = {
         name: form.name.trim(),
         email: form.email.trim(),
         password: form.password,
         role,
-      })
-      localStorage.setItem('token', data.token)
-      localStorage.setItem('user', JSON.stringify(data.user))
-      localStorage.setItem('profileCompletion', '20')
-      toast.success("Account created! Let's set up your profile.")
-      setTimeout(() => navigate('/profile/setup'), 600)
+      }
+      if (role === 'freelancer') {
+        payload.portfolio = form.portfolio || ''
+        payload.github = form.github || ''
+        payload.linkedin = form.linkedin || ''
+      }
+      const { data } = await api.post('/api/auth/register', payload)
+
+      if (role === 'freelancer') {
+        // Freelancer registration - redirect to login with pending approval message
+        toast.success('Request sent! Waiting for admin approval.')
+        setTimeout(() => navigate('/login'), 600)
+      } else {
+        // Client registration - proceed to profile setup
+        localStorage.setItem('token', data.token)
+        localStorage.setItem('user', JSON.stringify(data.user))
+        localStorage.setItem('profileCompletion', '20')
+        toast.success("Account created! Let's set up your profile.")
+        setTimeout(() => navigate('/profile/setup'), 600)
+      }
     } catch (err) {
       toast.error(err.response?.data?.message || 'Registration failed')
     } finally {
@@ -116,20 +135,16 @@ export default function Register() {
   const cx = exiting ? 'auth-card-exit' : 'auth-card-enter'
   const hx = exiting ? 'auth-head-exit' : 'auth-head-enter'
 
-  // ── Step 1: Role picker ────────────────────────────────────────────────
   if (step === 'role') {
     return (
       <div className="min-h-screen bg-zinc-100 flex flex-col items-center justify-center p-4">
-
-        <div key={`head-${step}`} className={`mb-8 text-center ${hx}`}>
-          <div className="text-xl font-bold text-zinc-900 tracking-tight">FreeLock</div>
+        <div className={`mb-8 text-center ${hx}`}>
+          <div className="text-xl font-bold text-zinc-900 tracking-tight">Safelancer</div>
           <div className="text-sm text-zinc-500 mt-1">Escrow-protected freelancing</div>
         </div>
-
-        <div key={`card-${step}`} className={`bg-white rounded-xl border border-zinc-200 p-8 w-full max-w-md shadow-sm ${cx}`}>
-          <h1 className="text-base font-semibold text-zinc-900 mb-1">Join FreeLock</h1>
-          <p className="text-sm text-zinc-500 mb-6">How do you want to use FreeLock?</p>
-
+        <div className={`bg-white rounded-xl border border-zinc-200 p-8 w-full max-w-md shadow-sm ${cx}`}>
+          <h1 className="text-base font-semibold text-zinc-900 mb-1">Join Safelancer</h1>
+          <p className="text-sm text-zinc-500 mb-6">How do you want to use Safelancer?</p>
           <div className="grid grid-cols-2 gap-3 mb-6">
             {ROLES.map(({ value, label, sub, icon }) => (
               <button
@@ -152,33 +167,12 @@ export default function Register() {
               </button>
             ))}
           </div>
-
           <button
             onClick={handleContinue}
             className="w-full bg-zinc-900 hover:bg-zinc-800 text-white font-medium py-2.5 rounded-lg text-sm transition-colors"
           >
             Continue
           </button>
-
-          <div className="flex items-center gap-3 my-5">
-            <div className="flex-1 h-px bg-zinc-100" />
-            <span className="text-xs text-zinc-400">or sign up with Google</span>
-            <div className="flex-1 h-px bg-zinc-100" />
-          </div>
-
-          <div className="grid grid-cols-2 gap-2">
-            {ROLES.map(({ value, label }) => (
-              <a
-                key={value}
-                href={`${API_URL}/api/auth/google?role=${value}`}
-                className="flex items-center justify-center gap-1.5 border border-zinc-200 rounded-lg py-2.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50 transition-colors"
-              >
-                <GoogleIcon />
-                <span>as {label}</span>
-              </a>
-            ))}
-          </div>
-
           <p className="mt-5 text-center text-zinc-500 text-sm">
             Already have an account?{' '}
             <button type="button" onClick={() => goTo('/login')} className="text-zinc-900 font-semibold hover:underline underline-offset-2">Sign in</button>
@@ -188,16 +182,13 @@ export default function Register() {
     )
   }
 
-  // ── Step 2: Registration form ──────────────────────────────────────────
   return (
     <div className="min-h-screen bg-zinc-100 flex flex-col items-center justify-center p-4 py-10">
-
-      <div key={`head-${step}`} className={`mb-8 text-center ${hx}`}>
-        <div className="text-xl font-bold text-zinc-900 tracking-tight">FreeLock</div>
+      <div className={`mb-8 text-center ${hx}`}>
+        <div className="text-xl font-bold text-zinc-900 tracking-tight">Safelancer</div>
         <div className="text-sm text-zinc-500 mt-1">Create your account</div>
       </div>
-
-      <div key={`card-${step}`} className={`bg-white rounded-xl border border-zinc-200 p-8 w-full max-w-md shadow-sm ${cx}`}>
+      <div className={`bg-white rounded-xl border border-zinc-200 p-8 w-full max-w-md shadow-sm ${cx}`}>
         <div className="flex items-center justify-between mb-1">
           <h1 className="text-base font-semibold text-zinc-900">Create an account</h1>
           <button
@@ -215,7 +206,6 @@ export default function Register() {
           Signing up as a{' '}
           <span className="font-medium text-zinc-900 capitalize">{role}</span>
         </p>
-
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-zinc-700 mb-1.5">Name</label>
@@ -228,7 +218,6 @@ export default function Register() {
               placeholder="Your name"
             />
           </div>
-
           <div>
             <label className="block text-sm font-medium text-zinc-700 mb-1.5">Email</label>
             <input
@@ -240,7 +229,6 @@ export default function Register() {
               placeholder="you@company.com"
             />
           </div>
-
           <div>
             <label className="block text-sm font-medium text-zinc-700 mb-1.5">Password</label>
             <div className="relative">
@@ -265,7 +253,6 @@ export default function Register() {
               </div>
             )}
           </div>
-
           <div>
             <label className="block text-sm font-medium text-zinc-700 mb-1.5">Confirm Password</label>
             <div className="relative">
@@ -293,6 +280,43 @@ export default function Register() {
             )}
           </div>
 
+          {/* Freelancer verification fields */}
+          {role === 'freelancer' && (
+            <div className="space-y-3 border-t border-zinc-100 pt-4 mt-2">
+              <p className="text-xs font-medium text-zinc-500">Verification (optional but recommended)</p>
+              <div>
+                <label className="block text-xs text-zinc-600 mb-1">LinkedIn Profile URL</label>
+                <input
+                  type="url"
+                  value={form.linkedin}
+                  onChange={e => setForm({ ...form, linkedin: e.target.value })}
+                  placeholder="https://linkedin.com/in/username"
+                  className="w-full border border-zinc-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-zinc-400"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-zinc-600 mb-1">GitHub Profile URL</label>
+                <input
+                  type="url"
+                  value={form.github}
+                  onChange={e => setForm({ ...form, github: e.target.value })}
+                  placeholder="https://github.com/username"
+                  className="w-full border border-zinc-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-zinc-400"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-zinc-600 mb-1">Portfolio / Website URL</label>
+                <input
+                  type="url"
+                  value={form.portfolio}
+                  onChange={e => setForm({ ...form, portfolio: e.target.value })}
+                  placeholder="https://yourportfolio.com"
+                  className="w-full border border-zinc-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-zinc-400"
+                />
+              </div>
+            </div>
+          )}
+
           <button
             type="submit"
             disabled={loading}
@@ -302,19 +326,29 @@ export default function Register() {
           </button>
         </form>
 
-        <div className="flex items-center gap-3 my-5">
-          <div className="flex-1 h-px bg-zinc-100" />
-          <span className="text-xs text-zinc-400">or</span>
-          <div className="flex-1 h-px bg-zinc-100" />
-        </div>
+        {/* Google Signup - Only for Clients */}
+        {role === 'client' && (
+          <>
+            <div className="flex items-center gap-3 my-5">
+              <div className="flex-1 h-px bg-zinc-100" />
+              <span className="text-xs text-zinc-400">or sign up with Google</span>
+              <div className="flex-1 h-px bg-zinc-100" />
+            </div>
 
-        <a
-          href={`${API_URL}/api/auth/google?role=${role}`}
-          className="w-full flex items-center justify-center gap-2.5 border border-zinc-200 rounded-lg py-2.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors"
-        >
-          <GoogleIcon />
-          Continue with Google
-        </a>
+            <a
+              href={`${API_URL}/api/auth/google?role=client`}
+              className="w-full flex items-center justify-center gap-2.5 border border-zinc-200 rounded-lg py-2.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors"
+            >
+              <svg className="w-4 h-4" viewBox="0 0 24 24">
+                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/>
+                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+              </svg>
+              Sign up with Google
+            </a>
+          </>
+        )}
 
         <p className="mt-5 text-center text-zinc-500 text-sm">
           Already have an account?{' '}

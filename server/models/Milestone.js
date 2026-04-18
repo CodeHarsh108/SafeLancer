@@ -24,9 +24,21 @@ const milestoneSchema = new mongoose.Schema({
   reviewNote: String,
   inaccuracyNote: String,
   inaccuracyCount: { type: Number, default: 0 },
+  maxRevisions: { type: Number, default: 2 },
   originalDeadline: Date,
+  deadlineExtensions: [{
+    extendedAt: { type: Date, default: Date.now },
+    newDeadline: Date,
+    reason: String,
+    extendedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
+  }],
   deadlineExtendedAt: Date,
   extensionReason: String,
+  submissionVideoUrl: String,
+  submissionVideoHash: String,
+  paymentDueAt: Date,
+  clientPaymentPenaltyApplied: { type: Boolean, default: false },
+  submissionPenaltyApplied: { type: Boolean, default: false },
   autoReleaseAt: Date,
   releasedAt: Date,
   meetingScheduledAt: Date,
@@ -36,5 +48,8 @@ const milestoneSchema = new mongoose.Schema({
   payoutStatus:       { type: String, enum: ['pending', 'processing', 'processed', 'failed', ''], default: '' },
   payoutInitiatedAt:  Date
 }, { timestamps: true });
+
+milestoneSchema.index({ contract: 1, isAdvance: 1 });
+milestoneSchema.index({ contract: 1, milestoneNumber: 1 });
 
 module.exports = mongoose.model('Milestone', milestoneSchema);

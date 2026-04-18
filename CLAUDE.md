@@ -30,14 +30,14 @@ freelock/
 
 | File | Key fields |
 |------|-----------|
-| User.js | name, email, password (bcrypt), role (client/freelancer/admin), rating, totalJobsCompleted, onTimeDeliveryRate, disputeRate |
+| User.js | name, email, password (bcrypt), role (client/freelancer/admin), rating, totalJobsCompleted, onTimeDeliveryRate, disputeRate, isBanned, banReason, penaltyDue, penaltyCount |
 | Portfolio.js | user (ref), skills[], hourlyRate, availability, bio, githubUrl, projectSamples[{title,fileHash,url}], companyName, paymentVerified |
 | Job.js | title, description, budget, deadline, skills[], status (open/in_progress/completed/cancelled), bids[] subdoc |
 | DemoRequest.js | client, freelancer, message, proposedAt, status (pending/accepted/rejected/completed/expired), meetingRoomId, meetingAt, rejectionReason, convertedToJob, jobId |
 | Negotiation.js | job, client, freelancer, rounds[] (roundNumber, amount, timeline, milestoneCount, scope, message, status, proposedByRole), currentRound, maxRounds:4, status (active/agreed/rejected/expired), agreedAmount/agreedTimeline/agreedMilestoneCount/agreedScope |
 | Contract.js | hashId (auto SHA-256 16-char uppercase), job, client, freelancer, amount, milestoneCount, status (active/completed/withdrawn/disputed) |
-| Milestone.js | contract, milestoneNumber, title, description, amount, status (11 values), isAdvance, inaccuracyCount (0/1/2), submissionFileHash, inaccuracyNote, autoReleaseAt, deadline |
-| Dispute.js | contract, milestone, raisedBy, reason, type (milestone/manual/withdrawal), evidence[], status (open/resolved), resolution (release_to_freelancer/refund_to_client/split), splitPercent |
+| Milestone.js | contract, milestoneNumber, title, description, amount, status (11 values), isAdvance, inaccuracyCount, maxRevisions (from job phase), submissionFileHash, submissionVideoHash, inaccuracyNote, autoReleaseAt, paymentDueAt (48h after approved), deadlineExtensions[], clientPaymentPenaltyApplied, submissionPenaltyApplied, deadline |
+| Dispute.js | contract, milestone, raisedBy, reason, type (milestone/manual/withdrawal/deadline_breach/payment_default/freelancer_exit), evidence[], status (open/resolved), resolution (release_to_freelancer/refund_to_client/split), splitPercent, evidenceSummary (auto-compiled: submissionHashes, videoHashes, deadlineExtensionCount, inaccuracyNotes) |
 | Rating.js | contract, milestone, ratedBy, ratedUser, role (client_rating_freelancer/freelancer_rating_client), stars, review, communication, quality, timeliness, professionalism, isVisible |
 | Message.js | contract, sender, senderName, senderRole (client/freelancer/admin), text, type (text/system/meeting_request/file), meetingData{scheduledAt,agenda,status}, readBy[] |
 
@@ -227,21 +227,14 @@ Client emits → Server handles → Server broadcasts:
 - 401 response → clears localStorage → redirects to `/login`
 - `ProtectedRoute` checks `token` + optionally `user.role` matches required role
 
-## Seed Data (`node seed.js` from server/)
+## Database State
 
-Creates 4 users:
-- `admin@test.com` / `Test@123` → Admin User
-- `client@test.com` / `Test@123` → Alex Johnson (Client)
-- `freelancer@test.com` / `Test@123` → Sam Developer (Freelancer)
-- `freelancer2@test.com` / `Test@123` → Priya Designer (Freelancer)
+Clean — no demo data. Real users register via `/register`.
 
-Creates 3 jobs:
-1. **"Build E-Commerce Website"** (in_progress) — has active contract + 4 milestones:
-   - Advance (#0): released | Phase 1 (#1): released | Phase 2 (#2): in review | Phase 3 (#3): pending_deposit
-2. **"Build React Dashboard"** (open, ₹50,000) — pipeline demo:
-   - Sam: `interviewed` → client sees in "Awaiting Your Decision" → can Hire/Negotiate/Reject
-   - Priya: `interview_scheduled` today at 3 PM → client sees in "Interviews Scheduled Today" → can Join Interview
-3. **"Mobile App: Fitness Tracker"** (open, ₹80,000) — no applicants yet, fresh for demo
+**Reset** (`node reset.js` from server/): clears all collections, creates admin only.
+- Admin: `admin@freelock.in` / `Admin@123`
+
+**Old seed** (`node seed.js`): still exists but not used. Creates demo users + pre-built contracts for demo purposes only.
 
 ## Test Suite
 `node server/tests/workflow.test.js` — 60+ HTTP integration tests, no external deps, requires server running on :5001

@@ -4,9 +4,20 @@ const multer = require('multer');
 const path = require('path');
 const crypto = require('crypto');
 const fs = require('fs');
+const axios = require('axios');
 const Portfolio = require('../models/Portfolio');
 const auth = require('../middleware/auth');
 const { calcCompletion } = require('../utils/profileCompletion');
+const isTestMode = require('../utils/isTestMode');
+
+function razorpayClient() {
+  const Razorpay = require('razorpay');
+  return new Razorpay({ key_id: process.env.RAZORPAY_KEY_ID, key_secret: process.env.RAZORPAY_KEY_SECRET });
+}
+
+function rzpAuth() {
+  return { username: process.env.RAZORPAY_KEY_ID, password: process.env.RAZORPAY_KEY_SECRET };
+}
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, path.join(__dirname, '../uploads')),
@@ -90,23 +101,78 @@ router.post('/upload-avatar', auth, upload.single('avatar'), async (req, res) =>
   }
 });
 
-// POST /api/portfolio/verify-payment
-// In production this would be triggered by a Razorpay webhook after adding a payment method.
-// For now it's a direct call clients can make to mark their payment method as verified.
-router.post('/verify-payment', auth, async (req, res) => {
+// POST /api/portfolio/create-verification-order — client: creates ₹1 Razorpay order
+router.post('/create-verification-order', auth, async (req, res) => {
   try {
     if (req.user.role !== 'client') return res.status(403).json({ message: 'Clients only' });
+    if (isTestMode()) {
+      return res.json({
+        orderId: 'order_test_verify_' + Date.now(),
+        amount: 100,
+        currency: 'INR',
+        key: process.env.RAZORPAY_KEY_ID || 'test',
+        isTestMode: true
+      });
+    }
+    const razorpay = razorpayClient();
+    const order = await razorpay.orders.create({
+      amount: 100,
+      currency: 'INR',
+      receipt: 'verify_' + req.user.id + '_' + Date.now(),
+      notes: { purpose: 'payment_verification', userId: req.user.id }
+    });
+    res.json({ orderId: order.id, amount: order.amount, currency: order.currency, key: process.env.RAZORPAY_KEY_ID });
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to create order', error: err.message });
+  }
+});
+
+// POST /api/portfolio/confirm-verification — client: verify Razorpay signature + auto-refund + mark verified
+router.post('/confirm-verification', auth, async (req, res) => {
+  try {
+    if (req.user.role !== 'client') return res.status(403).json({ message: 'Clients only' });
+    const { razorpay_payment_id, razorpay_order_id, razorpay_signature } = req.body;
+
+    // Test mode: skip signature check and refund for mock orders
+    if (razorpay_order_id?.startsWith('order_test_')) {
+      const portfolio = await Portfolio.findOneAndUpdate(
+        { user: req.user.id },
+        { $set: { paymentVerified: true } },
+        { new: true, upsert: true }
+      );
+      const completion = calcCompletion(portfolio.role, portfolio.toObject());
+      await Portfolio.findOneAndUpdate({ user: req.user.id }, { $set: { completionPercent: completion } });
+      return res.json({ paymentVerified: true, completionPercent: completion });
+    }
+
+    if (!razorpay_payment_id || !razorpay_order_id || !razorpay_signature) {
+      return res.status(400).json({ message: 'Missing payment fields' });
+    }
+    const expectedSig = crypto
+      .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
+      .update(razorpay_order_id + '|' + razorpay_payment_id)
+      .digest('hex');
+    if (expectedSig !== razorpay_signature) {
+      return res.status(400).json({ message: 'Payment signature verification failed' });
+    }
+    const razorpay = razorpayClient();
+    await razorpay.payments.refund(razorpay_payment_id, { amount: 100, speed: 'optimum', notes: { reason: 'payment_method_verification' } });
     const portfolio = await Portfolio.findOneAndUpdate(
       { user: req.user.id },
       { $set: { paymentVerified: true } },
       { new: true, upsert: true }
     );
-    const completion = calcCompletion(portfolio.role, portfolio);
+    const completion = calcCompletion(portfolio.role, portfolio.toObject());
     await Portfolio.findOneAndUpdate({ user: req.user.id }, { $set: { completionPercent: completion } });
     res.json({ paymentVerified: true, completionPercent: completion });
   } catch (err) {
-    res.status(500).json({ message: 'Server error', error: err.message });
+    res.status(500).json({ message: 'Verification failed', error: err.message });
   }
+});
+
+// POST /api/portfolio/verify-payment — kept for backward compat, now delegates to confirm flow
+router.post('/verify-payment', auth, async (req, res) => {
+  res.status(400).json({ message: 'Use /create-verification-order and /confirm-verification instead' });
 });
 
 // POST /api/portfolio/payout-details — freelancer saves bank/UPI payout info
@@ -132,7 +198,7 @@ router.post('/payout-details', auth, async (req, res) => {
     const update = {
       payoutMethod,
       payoutDetailsAdded: true,
-      // Reset Razorpay cached IDs when details change
+      paymentVerified: false,
       razorpayContactId: '',
       razorpayFundAccountId: ''
     };
@@ -157,6 +223,77 @@ router.post('/payout-details', auth, async (req, res) => {
     res.json({ success: true, payoutMethod: portfolio.payoutMethod, payoutDetailsAdded: true });
   } catch (err) {
     res.status(500).json({ message: 'Server error', error: err.message });
+  }
+});
+
+// POST /api/portfolio/verify-payout — freelancer: create Razorpay Contact + Fund Account to validate UPI/bank
+router.post('/verify-payout', auth, async (req, res) => {
+  try {
+    if (req.user.role !== 'freelancer') return res.status(403).json({ message: 'Freelancers only' });
+    const portfolio = await Portfolio.findOne({ user: req.user.id });
+    if (!portfolio || !portfolio.payoutDetailsAdded) {
+      return res.status(400).json({ message: 'Add payout details first' });
+    }
+    if (portfolio.payoutMethod === 'upi') {
+      if (!portfolio.upiId || !/^[a-zA-Z0-9.\-_]{2,256}@[a-zA-Z]{2,64}$/.test(portfolio.upiId)) {
+        return res.status(400).json({ message: 'Invalid UPI ID format (e.g. name@upi)' });
+      }
+    } else if (portfolio.payoutMethod === 'bank') {
+      if (!portfolio.bankAccountNumber || !portfolio.ifscCode || !portfolio.accountHolderName) {
+        return res.status(400).json({ message: 'Bank details incomplete' });
+      }
+      if (!/^[A-Z]{4}0[A-Z0-9]{6}$/.test(portfolio.ifscCode)) {
+        return res.status(400).json({ message: 'Invalid IFSC code (e.g. HDFC0001234)' });
+      }
+      if (portfolio.bankAccountNumber.length < 9 || portfolio.bankAccountNumber.length > 18) {
+        return res.status(400).json({ message: 'Account number must be 9–18 digits' });
+      }
+    } else {
+      return res.status(400).json({ message: 'Select a payout method first' });
+    }
+
+    const razorpay = razorpayClient();
+    const User = require('../models/User');
+    const user = await User.findById(req.user.id);
+
+    // Create or reuse Razorpay Contact via REST API (SDK 2.x lacks contacts resource)
+    let contactId = portfolio.razorpayContactId;
+    if (!contactId) {
+      const { data: contact } = await axios.post(
+        'https://api.razorpay.com/v1/contacts',
+        { name: user.name, email: user.email, type: 'vendor', reference_id: req.user.id },
+        { auth: rzpAuth() }
+      );
+      contactId = contact.id;
+    }
+
+    // Create Fund Account — Razorpay validates the UPI VPA or bank account here
+    const faData = { contact_id: contactId };
+    if (portfolio.payoutMethod === 'upi') {
+      faData.account_type = 'vpa';
+      faData.vpa = { address: portfolio.upiId };
+    } else {
+      faData.account_type = 'bank_account';
+      faData.bank_account = {
+        name: portfolio.accountHolderName,
+        ifsc: portfolio.ifscCode,
+        account_number: portfolio.bankAccountNumber
+      };
+    }
+    const fundAccount = await razorpay.fundAccount.create(faData);
+
+    const updated = await Portfolio.findOneAndUpdate(
+      { user: req.user.id },
+      { $set: { paymentVerified: true, razorpayContactId: contactId, razorpayFundAccountId: fundAccount.id } },
+      { new: true }
+    );
+    const completion = calcCompletion('freelancer', updated.toObject());
+    await Portfolio.findOneAndUpdate({ user: req.user.id }, { $set: { completionPercent: completion } });
+    res.json({ paymentVerified: true, completionPercent: completion });
+  } catch (err) {
+    // Razorpay validation errors have a specific shape
+    const msg = err?.error?.description || err?.message || 'Verification failed';
+    res.status(400).json({ message: msg });
   }
 });
 

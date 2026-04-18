@@ -5,21 +5,19 @@ const bidSchema = new mongoose.Schema({
   proposal:   { type: String, required: true },
   status: {
     type: String,
-    enum: ['applied', 'shortlisted', 'interview_scheduled', 'interviewed', 'negotiating', 'hired', 'rejected'],
+    enum: ['applied', 'shortlisted', 'hired', 'rejected'],
     default: 'applied'
   },
-  appliedAt:            { type: Date, default: Date.now },
-  shortlistedAt:        Date,
-  interviewScheduledAt: Date,
-  meetingRoomId:        String,
-  interviewDoneAt:      Date,
-  rejectionReason:      String,
-  hiredAt:              Date,
+  appliedAt:       { type: Date, default: Date.now },
+  shortlistedAt:   Date,
+  rejectionReason: String,
+  hiredAt:         Date,
 }, { timestamps: true });
 
 const phaseSchema = new mongoose.Schema({
   title:           { type: String, required: true },
   guideline:       { type: String, required: true },
+  guidelineHash:   { type: String },
   deliverableType: {
     type: String,
     enum: ['Code File', 'Design File', 'Document', 'APK', 'Video', 'Other'],
@@ -52,11 +50,7 @@ const jobSchema = new mongoose.Schema({
   advancePercent:   { type: Number, enum: [10, 15, 20, 25], default: 10 },
   scopeHash:        { type: String },
   phases:           [phaseSchema],
-  referenceFiles:   [referenceFileSchema],
-  nda:              { type: Boolean, default: false },
-  ipOwnership:      { type: String, enum: ['client', 'freelancer'], default: 'client' },
-  latePenalty:      { type: Number, default: 0 },
-  autoReleaseHours: { type: Number, enum: [48, 72, 168], default: 72 }
+  referenceFiles:   [referenceFileSchema]
 }, { timestamps: true });
 
 module.exports = mongoose.model('Job', jobSchema);

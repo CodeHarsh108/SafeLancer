@@ -26,7 +26,13 @@ const userSchema = new mongoose.Schema({
   onTimePaymentRate: { type: Number, default: 0 },
   disputeRate: { type: Number, default: 0 },
   loginAttempts: { type: Number, default: 0 },
-  lockUntil: { type: Date }
+  lockUntil: { type: Date },
+  isBanned: { type: Boolean, default: false },
+  banReason: { type: String, default: '' },
+  penaltyDue: { type: Number, default: 0 },
+  penaltyCount: { type: Number, default: 0 },
+  walletBalance: { type: Number, default: 0 },
+  verificationStatus: { type: String, enum: ['pending', 'approved', 'rejected'], default: 'pending' }
 }, { timestamps: true });
 
 userSchema.virtual('isLocked').get(function () {

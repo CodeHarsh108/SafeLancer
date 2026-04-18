@@ -9,20 +9,15 @@ const profileCompletion = () => parseInt(localStorage.getItem('profileCompletion
 const STATUS_LABELS = {
   applied: { label: 'Applied', color: 'bg-zinc-100 text-zinc-600' },
   shortlisted: { label: 'Shortlisted', color: 'bg-zinc-800 text-white' },
-  interview_scheduled: { label: 'Interview Scheduled', color: 'bg-zinc-100 text-zinc-700' },
-  interviewed: { label: 'Interviewed', color: 'bg-zinc-900 text-white' },
-  negotiating: { label: 'In Negotiation', color: 'bg-zinc-100 text-zinc-700' },
-  hired: { label: 'Hired', color: 'bg-zinc-900 text-white' },
+  hired: { label: 'Hired', color: 'bg-emerald-100 text-emerald-700' },
   rejected: { label: 'Rejected', color: 'bg-zinc-200 text-zinc-600' },
 }
 
-const TABS = ['All', 'Applied', 'Shortlisted', 'Interview', 'Interviewed']
+const TABS = ['All', 'Applied', 'Shortlisted']
 const TAB_STATUS = {
   All: null,
   Applied: ['applied'],
   Shortlisted: ['shortlisted'],
-  Interview: ['interview_scheduled'],
-  Interviewed: ['interviewed'],
 }
 
 export default function JobDetail() {
@@ -36,12 +31,6 @@ export default function JobDetail() {
   const [submitting, setSubmitting] = useState(false)
   const [activeTab, setActiveTab] = useState('All')
   const [actionLoading, setActionLoading] = useState(null)
-  const [schedulingBidId, setSchedulingBidId] = useState(null)
-  const [scheduledAt, setScheduledAt] = useState('')
-  const [demoModal, setDemoModal] = useState(null)
-  const [demoForm, setDemoForm] = useState({ message: '', proposedAt: '' })
-  const [demoLoading, setDemoLoading] = useState(false)
-
   const reload = () =>
     api.get(`/api/jobs/${id}`)
       .then(({ data }) => setJob(data))
@@ -61,52 +50,60 @@ export default function JobDetail() {
     } finally { setSubmitting(false) }
   }
 
+  const handleAdvancePayment = async (advanceMilestone, contractId) => {
+    try {
+      const { data } = await api.post(`/api/milestones/${advanceMilestone._id}/fund`)
+      const isTestMode = !data.razorpayKeyId || data.razorpayKeyId.includes('placeholder') || data.razorpayOrderId?.startsWith('order_test_')
+      if (isTestMode) {
+        toast.success('Advance payment secured! Project is now active.')
+        navigate(`/contracts/${contractId}`)
+        return
+      }
+      const options = {
+        key: data.razorpayKeyId,
+        amount: Math.round(advanceMilestone.amount * 100),
+        currency: 'INR',
+        name: 'SafeLancer Escrow',
+        description: advanceMilestone.title,
+        order_id: data.razorpayOrderId,
+        handler: async (response) => {
+          try {
+            await api.post(`/api/milestones/${advanceMilestone._id}/verify-payment`, {
+              razorpay_order_id: response.razorpay_order_id,
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_signature: response.razorpay_signature,
+            })
+            toast.success('Advance payment secured! Project is now active.')
+            navigate(`/contracts/${contractId}`)
+          } catch { toast.error('Payment verification failed.') }
+        },
+        prefill: { name: user.name, email: user.email },
+        theme: { color: '#09090b' },
+        modal: { ondismiss: () => toast('Payment cancelled. The contract is on hold until advance is paid.') }
+      }
+      const rzp = new window.Razorpay(options)
+      rzp.on('payment.failed', (response) => toast.error(`Payment failed: ${response.error.description}`))
+      rzp.open()
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to initiate advance payment')
+    }
+  }
+
   const action = async (bidId, endpoint, body = {}) => {
     setActionLoading(bidId + endpoint)
     try {
       const { data } = await api.patch(`/api/jobs/${id}/applications/${bidId}/${endpoint}`, body)
+      if (endpoint === 'hire') {
+        setJob(data.job || data)
+        toast('Freelancer hired! Complete the advance payment to activate the project.')
+        await handleAdvancePayment(data.advanceMilestone, data.contract._id)
+        return data
+      }
       setJob(data.job || data)
       toast.success('Done')
       return data
     } catch (err) {
       toast.error(err.response?.data?.message || 'Action failed')
-    } finally { setActionLoading(null) }
-  }
-
-  const handleSchedule = async (bidId) => {
-    if (!scheduledAt) return toast.error('Pick a date and time')
-    setActionLoading(bidId + 'schedule')
-    try {
-      const { data } = await api.patch(`/api/jobs/${id}/applications/${bidId}/schedule-interview`, { scheduledAt })
-      setJob(data)
-      setSchedulingBidId(null)
-      setScheduledAt('')
-      toast.success('Interview scheduled!')
-    } catch (err) {
-      toast.error(err.response?.data?.message || 'Failed to schedule')
-    } finally { setActionLoading(null) }
-  }
-
-  const sendDemoRequest = async () => {
-    if (!demoForm.message) return toast.error('Please describe what you want to see')
-    setDemoLoading(true)
-    try {
-      await api.post('/api/demos/request', { freelancerId: demoModal._id, message: demoForm.message, proposedAt: demoForm.proposedAt })
-      toast.success('Demo request sent!')
-      setDemoModal(null)
-      setDemoForm({ message: '', proposedAt: '' })
-    } catch { toast.error('Failed to send demo request') }
-    finally { setDemoLoading(false) }
-  }
-
-  const handleNegotiate = async (bidId) => {
-    setActionLoading(bidId + 'negotiate')
-    try {
-      const { data } = await api.patch(`/api/jobs/${id}/applications/${bidId}/negotiate`)
-      toast.success('Negotiation started!')
-      setTimeout(() => navigate(`/negotiations/${data.negotiationId}`), 800)
-    } catch (err) {
-      toast.error(err.response?.data?.message || 'Failed to start negotiation')
     } finally { setActionLoading(null) }
   }
 
@@ -141,6 +138,10 @@ export default function JobDetail() {
     <div className="min-h-screen bg-zinc-100">
       <Navbar />
       <div className="max-w-3xl mx-auto p-6">
+        <button onClick={() => navigate(-1)} className="flex items-center gap-1.5 text-sm text-zinc-500 hover:text-zinc-900 font-medium mb-4 transition-colors">
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+          Back
+        </button>
 
         {/* Job card */}
         <div className="bg-white rounded-xl border border-zinc-200 p-6 mb-5">
@@ -237,32 +238,6 @@ export default function JobDetail() {
           </div>
         )}
 
-        {/* Terms */}
-        {(job.nda || job.latePenalty > 0 || job.ipOwnership) && (
-          <div className="bg-white rounded-xl border border-zinc-200 p-6 mb-5">
-            <h2 className="text-base font-semibold text-zinc-900 mb-3">Project Terms</h2>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="p-3 bg-zinc-50 rounded-lg border border-zinc-100">
-                <p className="text-xs text-zinc-500 mb-0.5">NDA</p>
-                <p className="text-sm font-medium text-zinc-900">{job.nda ? 'Required' : 'Not required'}</p>
-              </div>
-              <div className="p-3 bg-zinc-50 rounded-lg border border-zinc-100">
-                <p className="text-xs text-zinc-500 mb-0.5">IP Ownership</p>
-                <p className="text-sm font-medium text-zinc-900">{job.ipOwnership === 'client' ? 'Client owns all deliverables' : 'Freelancer retains license'}</p>
-              </div>
-              {job.latePenalty > 0 && (
-                <div className="p-3 bg-zinc-50 rounded-lg border border-zinc-100">
-                  <p className="text-xs text-zinc-500 mb-0.5">Late Penalty</p>
-                  <p className="text-sm font-medium text-zinc-900">{job.latePenalty}% per phase if deadline missed</p>
-                </div>
-              )}
-              <div className="p-3 bg-zinc-50 rounded-lg border border-zinc-100">
-                <p className="text-xs text-zinc-500 mb-0.5">Auto-release Timer</p>
-                <p className="text-sm font-medium text-zinc-900">{job.autoReleaseHours === 168 ? '7 days' : `${job.autoReleaseHours || 72} hours`} after submission</p>
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* Freelancer: apply */}
         {user.role === 'freelancer' && job.status === 'open' && !myBid && (
@@ -318,18 +293,6 @@ export default function JobDetail() {
               </span>
             </div>
             <p className="text-zinc-600 text-sm leading-relaxed">{myBid.proposal}</p>
-            {myBid.status === 'interview_scheduled' && myBid.meetingRoomId && (
-              <div className="mt-3 p-3 bg-zinc-50 border border-zinc-200 rounded-lg flex items-center justify-between">
-                <p className="text-sm text-zinc-800 font-medium">
-                  Interview at {new Date(myBid.interviewScheduledAt).toLocaleString()}
-                </p>
-                <Link
-                  to={`/interview/${myBid.meetingRoomId}?job=${encodeURIComponent(job.title)}&jobId=${job._id}`}
-                  className="bg-zinc-900 hover:bg-zinc-800 text-white px-3 py-1.5 rounded-lg text-xs font-medium">
-                  Join
-                </Link>
-              </div>
-            )}
             {myBid.status === 'rejected' && myBid.rejectionReason && (
               <p className="mt-2 text-sm text-zinc-500">Reason: {myBid.rejectionReason}</p>
             )}
@@ -380,11 +343,6 @@ export default function JobDetail() {
                           </span>
                         </div>
                         <p className="text-zinc-500 text-sm leading-relaxed line-clamp-3">{b.proposal}</p>
-                        {b.status === 'interview_scheduled' && (
-                          <p className="text-xs text-zinc-600 mt-1 font-medium">
-                            Interview: {new Date(b.interviewScheduledAt).toLocaleString()}
-                          </p>
-                        )}
                         {b.status === 'rejected' && b.rejectionReason && (
                           <p className="text-xs text-zinc-500 mt-1">Reason: {b.rejectionReason}</p>
                         )}
@@ -398,10 +356,6 @@ export default function JobDetail() {
                             className="bg-zinc-900 hover:bg-zinc-800 text-white px-3 py-1.5 rounded-lg text-sm font-medium disabled:opacity-50 transition-colors">
                             {isLoading('shortlist') ? '...' : 'Shortlist'}
                           </button>
-                          <button onClick={() => setDemoModal(b.freelancer)}
-                            className="border border-zinc-200 bg-white hover:bg-zinc-50 text-zinc-700 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors">
-                            Request Demo
-                          </button>
                           <button onClick={() => action(b._id, 'reject')} disabled={isLoading('reject')}
                             className="border border-zinc-200 bg-white hover:bg-zinc-50 text-zinc-600 px-3 py-1.5 rounded-lg text-sm font-medium disabled:opacity-50 transition-colors">
                             Reject
@@ -410,64 +364,15 @@ export default function JobDetail() {
                       )}
                       {b.status === 'shortlisted' && (
                         <>
-                          {schedulingBidId === b._id ? (
-                            <div className="flex items-center gap-2">
-                              <input type="datetime-local" value={scheduledAt}
-                                onChange={e => setScheduledAt(e.target.value)}
-                                className="border border-zinc-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-zinc-400 transition-colors" />
-                              <button onClick={() => handleSchedule(b._id)} disabled={isLoading('schedule')}
-                                className="bg-zinc-900 hover:bg-zinc-800 text-white px-3 py-1.5 rounded-lg text-sm font-medium disabled:opacity-50">
-                                {isLoading('schedule') ? '...' : 'Confirm'}
-                              </button>
-                              <button onClick={() => setSchedulingBidId(null)}
-                                className="text-zinc-400 hover:text-zinc-600 text-sm">Cancel</button>
-                            </div>
-                          ) : (
-                            <button onClick={() => setSchedulingBidId(b._id)}
-                              className="bg-zinc-900 hover:bg-zinc-800 text-white px-3 py-1.5 rounded-lg text-sm font-medium">
-                              Schedule Interview
-                            </button>
-                          )}
-                          <button onClick={() => action(b._id, 'reject')} disabled={isLoading('reject')}
-                            className="border border-zinc-200 bg-white hover:bg-zinc-50 text-zinc-600 px-3 py-1.5 rounded-lg text-sm font-medium disabled:opacity-50 transition-colors">
-                            Reject
-                          </button>
-                        </>
-                      )}
-                      {b.status === 'interview_scheduled' && (
-                        <>
-                          <Link
-                            to={`/interview/${b.meetingRoomId}?job=${encodeURIComponent(job.title)}&jobId=${job._id}&bidId=${b._id}`}
-                            className="bg-zinc-900 hover:bg-zinc-800 text-white px-3 py-1.5 rounded-lg text-sm font-medium">
-                            Join Interview
-                          </Link>
-                          <button onClick={() => action(b._id, 'interview-done')} disabled={isLoading('interview-done')}
-                            className="border border-zinc-200 bg-white hover:bg-zinc-50 text-zinc-700 px-3 py-1.5 rounded-lg text-sm font-medium disabled:opacity-50 transition-colors">
-                            {isLoading('interview-done') ? '...' : 'Mark Done'}
-                          </button>
-                        </>
-                      )}
-                      {b.status === 'interviewed' && (
-                        <>
                           <button onClick={() => action(b._id, 'hire')} disabled={isLoading('hire')}
                             className="bg-zinc-900 hover:bg-zinc-800 text-white px-3 py-1.5 rounded-lg text-sm font-medium disabled:opacity-50 transition-colors">
                             {isLoading('hire') ? '...' : `Hire — ₹${job.budget?.toLocaleString()}`}
-                          </button>
-                          <button onClick={() => handleNegotiate(b._id)} disabled={isLoading('negotiate')}
-                            className="border border-zinc-200 bg-white hover:bg-zinc-50 text-zinc-700 px-3 py-1.5 rounded-lg text-sm font-medium disabled:opacity-50 transition-colors">
-                            {isLoading('negotiate') ? '...' : 'Negotiate'}
                           </button>
                           <button onClick={() => action(b._id, 'reject')} disabled={isLoading('reject')}
                             className="border border-zinc-200 bg-white hover:bg-zinc-50 text-zinc-500 px-3 py-1.5 rounded-lg text-sm font-medium disabled:opacity-50 transition-colors">
                             Reject
                           </button>
                         </>
-                      )}
-                      {b.status === 'negotiating' && (
-                        <Link to={`/negotiations`}
-                          className="border border-zinc-200 bg-white hover:bg-zinc-50 text-zinc-700 px-3 py-1.5 rounded-lg text-sm font-medium">
-                          View Negotiation
-                        </Link>
                       )}
                     </div>
                   </div>
@@ -478,38 +383,6 @@ export default function JobDetail() {
         )}
       </div>
 
-      {/* Demo Request Modal */}
-      {demoModal && (
-        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl border border-zinc-200 shadow-xl p-6 w-full max-w-md">
-            <h2 className="text-base font-semibold text-zinc-900 mb-1">Request Demo</h2>
-            <p className="text-sm text-zinc-500 mb-4">from {demoModal.name}</p>
-            <div className="space-y-3">
-              <div>
-                <label className="text-sm font-medium text-zinc-700 mb-1.5 block">What do you want to see?</label>
-                <textarea value={demoForm.message} onChange={e => setDemoForm({ ...demoForm, message: e.target.value })} rows={3}
-                  className="w-full border border-zinc-200 rounded-lg px-3 py-2.5 text-sm text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:border-zinc-400 transition-colors"
-                  placeholder="e.g. I want to see your approach to this project and past similar work" />
-              </div>
-              <div>
-                <label className="text-sm font-medium text-zinc-700 mb-1.5 block">Proposed Meeting Time</label>
-                <input type="datetime-local" value={demoForm.proposedAt} onChange={e => setDemoForm({ ...demoForm, proposedAt: e.target.value })}
-                  className="w-full border border-zinc-200 rounded-lg px-3 py-2.5 text-sm text-zinc-900 focus:outline-none focus:border-zinc-400 transition-colors" />
-              </div>
-              <div className="flex gap-2 pt-1">
-                <button onClick={sendDemoRequest} disabled={demoLoading}
-                  className="flex-1 bg-zinc-900 hover:bg-zinc-800 text-white font-medium py-2.5 rounded-lg text-sm transition-colors disabled:opacity-50">
-                  {demoLoading ? 'Sending...' : 'Send Request'}
-                </button>
-                <button onClick={() => { setDemoModal(null); setDemoForm({ message: '', proposedAt: '' }) }}
-                  className="flex-1 border border-zinc-200 text-zinc-600 font-medium py-2.5 rounded-lg text-sm hover:bg-zinc-50 transition-colors">
-                  Cancel
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }

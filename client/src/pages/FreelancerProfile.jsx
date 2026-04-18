@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useParams, Link } from 'react-router-dom'
+import { useParams, Link, useNavigate } from 'react-router-dom'
 import api from '../api'
 import Navbar from '../components/Navbar'
 import toast from 'react-hot-toast'
@@ -76,13 +76,11 @@ function InfoRow({ icon, label, value }) {
 
 export default function FreelancerProfile() {
   const { userId } = useParams()
+  const navigate = useNavigate()
   const me = JSON.parse(localStorage.getItem('user') || '{}')
   const [profile, setProfile] = useState(null)
   const [ratings, setRatings] = useState([])
   const [loading, setLoading] = useState(true)
-  const [demoModal, setDemoModal] = useState(false)
-  const [demoForm, setDemoForm] = useState({ message: '', proposedAt: '' })
-
   useEffect(() => {
     const load = async () => {
       try {
@@ -98,17 +96,7 @@ export default function FreelancerProfile() {
     load()
   }, [userId])
 
-  const sendDemoRequest = async () => {
-    if (!demoForm.message) return toast.error('Please describe what you want to see')
-    try {
-      await api.post('/api/demos/request', { freelancerId: userId, message: demoForm.message, proposedAt: demoForm.proposedAt })
-      toast.success('Demo request sent!')
-      setDemoModal(false)
-      setDemoForm({ message: '', proposedAt: '' })
-    } catch { toast.error('Failed to send demo request') }
-  }
-
-  if (loading) return (
+if (loading) return (
     <div className="min-h-screen bg-zinc-100"><Navbar />
       <div className="flex justify-center py-20">
         <div className="animate-spin h-6 w-6 border-2 border-zinc-900 border-t-transparent rounded-full" />
@@ -136,6 +124,13 @@ export default function FreelancerProfile() {
   return (
     <div className="min-h-screen bg-zinc-100">
       <Navbar />
+
+      <div className="max-w-4xl mx-auto px-6 pt-4">
+        <button onClick={() => navigate(-1)} className="flex items-center gap-1.5 text-sm text-zinc-500 hover:text-zinc-900 font-medium transition-colors">
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+          Back
+        </button>
+      </div>
 
       {/* Cover */}
       <div className="bg-zinc-900 h-36" />
@@ -183,12 +178,6 @@ export default function FreelancerProfile() {
             </div>
 
             {/* CTA — only for clients, never show edit here */}
-            {me.role === 'client' && (
-              <button onClick={() => setDemoModal(true)}
-                className="bg-zinc-900 hover:bg-zinc-800 text-white px-5 py-2.5 rounded-xl text-sm font-medium transition-colors">
-                Request Demo
-              </button>
-            )}
           </div>
 
           {/* Bio */}
@@ -339,38 +328,6 @@ export default function FreelancerProfile() {
 
       </div>
 
-      {/* ── Demo Modal ── */}
-      {demoModal && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl border border-zinc-200 shadow-xl p-6 w-full max-w-md">
-            <h2 className="text-base font-semibold text-zinc-900 mb-1">Request Demo</h2>
-            <p className="text-sm text-zinc-400 mb-4">from {profile.user?.name}</p>
-            <div className="space-y-4">
-              <div>
-                <label className="text-sm font-medium text-zinc-700 mb-1.5 block">What do you want to see?</label>
-                <textarea value={demoForm.message} onChange={e => setDemoForm({ ...demoForm, message: e.target.value })} rows={3}
-                  className={inputCls} placeholder="e.g. I want to see your React dashboard and how you handle state management" />
-              </div>
-              <div>
-                <label className="text-sm font-medium text-zinc-700 mb-1.5 block">Proposed Meeting Time</label>
-                <input type="datetime-local" value={demoForm.proposedAt}
-                  onChange={e => setDemoForm({ ...demoForm, proposedAt: e.target.value })}
-                  className={inputCls} />
-              </div>
-              <div className="flex gap-2 pt-1">
-                <button onClick={sendDemoRequest}
-                  className="flex-1 bg-zinc-900 hover:bg-zinc-800 text-white font-medium py-2.5 rounded-xl text-sm transition-colors">
-                  Send Request
-                </button>
-                <button onClick={() => setDemoModal(false)}
-                  className="flex-1 border border-zinc-200 text-zinc-600 font-medium py-2.5 rounded-xl text-sm hover:bg-zinc-50 transition-colors">
-                  Cancel
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }

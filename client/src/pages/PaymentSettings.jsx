@@ -16,14 +16,28 @@ export default function PaymentSettings() {
   const [contracts, setContracts] = useState([])
   const [loading, setLoading] = useState(true)
   const [showVerifyModal, setShowVerifyModal] = useState(false)
+  const [payoutForm, setPayoutForm] = useState({ payoutMethod: 'upi', upiId: '', bankAccountNumber: '', ifscCode: '', accountHolderName: '' })
+  const [payoutLoading, setPayoutLoading] = useState(false)
+  const [editingPayout, setEditingPayout] = useState(false)
+  const [verifyLoading, setVerifyLoading] = useState(false)
 
   useEffect(() => {
     Promise.all([
       api.get('/api/auth/me'),
       isClient ? api.get('/api/contracts/my-contracts') : api.get('/api/contracts/my-work'),
     ]).then(([me, c]) => {
-      setPortfolio(me.data.portfolio)
+      const p = me.data.portfolio
+      setPortfolio(p)
       setContracts(c.data)
+      if (isFreelancer && p) {
+        setPayoutForm({
+          payoutMethod: p.payoutMethod || 'upi',
+          upiId: p.upiId || '',
+          bankAccountNumber: p.bankAccountNumber || '',
+          ifscCode: p.ifscCode || '',
+          accountHolderName: p.accountHolderName || '',
+        })
+      }
     }).catch(() => toast.error('Failed to load payment data'))
       .finally(() => setLoading(false))
   }, [])
@@ -36,8 +50,37 @@ export default function PaymentSettings() {
       window.dispatchEvent(new Event('profileUpdated'))
       return updated
     })
-    setShowVerifyModal(false)
     toast.success('Payment method verified!')
+  }
+
+  const savePayoutDetails = async () => {
+    setPayoutLoading(true)
+    try {
+      await api.post('/api/portfolio/payout-details', payoutForm)
+      setPortfolio(prev => ({ ...prev, payoutDetailsAdded: true, paymentVerified: false, payoutMethod: payoutForm.payoutMethod, upiId: payoutForm.upiId, bankAccountNumber: payoutForm.bankAccountNumber, ifscCode: payoutForm.ifscCode, accountHolderName: payoutForm.accountHolderName }))
+      setEditingPayout(false)
+      toast.success('Details saved! Click Verify to confirm your payout account.')
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to save payout details')
+    } finally {
+      setPayoutLoading(false)
+    }
+  }
+
+  const verifyPayoutDetails = async () => {
+    setVerifyLoading(true)
+    try {
+      const { data } = await api.post('/api/portfolio/verify-payout')
+      setPortfolio(prev => ({ ...prev, paymentVerified: true }))
+      const pct = data.completionPercent
+      localStorage.setItem('profileCompletion', String(pct))
+      window.dispatchEvent(new Event('profileUpdated'))
+      toast.success('Payout account verified!')
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Verification failed')
+    } finally {
+      setVerifyLoading(false)
+    }
   }
 
   const isVerified = portfolio?.paymentVerified || false
@@ -65,16 +108,16 @@ export default function PaymentSettings() {
       )}
 
       <div className="max-w-3xl mx-auto p-6 pb-16">
+        <button onClick={() => navigate(-1)} className="flex items-center gap-1.5 text-sm text-zinc-500 hover:text-zinc-900 font-medium mb-4 transition-colors">
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+          Back
+        </button>
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="text-xl font-semibold text-zinc-900">Payment Settings</h1>
             <p className="text-sm text-zinc-500 mt-0.5">Manage your payment method and view transaction history</p>
           </div>
-          <button onClick={() => navigate(dashboardPath)}
-            className="text-sm text-zinc-500 hover:text-zinc-900 font-medium transition-colors">
-            ← Dashboard
-          </button>
         </div>
 
         {/* Summary stats */}
@@ -184,6 +227,164 @@ export default function PaymentSettings() {
                 </div>
               </div>
             )}
+          </div>
+        )}
+
+        {/* Freelancer payout details */}
+        {isFreelancer && (
+          <div className="bg-white rounded-xl border border-zinc-200 p-5 mb-4">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-sm font-semibold text-zinc-900">Payout Details</h2>
+              {portfolio?.paymentVerified ? (
+                <span className="text-xs bg-zinc-900 text-white px-2.5 py-1 rounded-full font-medium flex items-center gap-1.5">
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                  </svg>
+                  Verified
+                </span>
+              ) : (
+                <span className="text-xs bg-amber-50 text-amber-700 border border-amber-200 px-2.5 py-1 rounded-full font-medium">
+                  Not Verified
+                </span>
+              )}
+            </div>
+
+            {/* No details yet */}
+            {!portfolio?.payoutDetailsAdded && !editingPayout && (
+              <div className="text-center py-6 border border-dashed border-zinc-200 rounded-xl mb-3">
+                <div className="w-10 h-10 bg-zinc-100 rounded-xl flex items-center justify-center mx-auto mb-3">
+                  <svg className="w-5 h-5 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                  </svg>
+                </div>
+                <p className="text-sm text-zinc-600 font-medium">No payout account added</p>
+                <p className="text-xs text-zinc-400 mt-1 mb-4">Add your UPI ID or bank account to receive milestone payments</p>
+                <button onClick={() => setEditingPayout(true)}
+                  className="bg-zinc-900 hover:bg-zinc-800 text-white text-sm font-medium px-5 py-2 rounded-lg transition-colors">
+                  Add payout details
+                </button>
+              </div>
+            )}
+
+            {/* Saved details display */}
+            {portfolio?.payoutDetailsAdded && !editingPayout && (
+              <div className={`rounded-xl border p-4 mb-3 ${portfolio.paymentVerified ? 'bg-zinc-50 border-zinc-200' : 'bg-amber-50 border-amber-100'}`}>
+                <div className="flex items-center gap-3">
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${portfolio.paymentVerified ? 'bg-zinc-900' : 'bg-amber-100'}`}>
+                    <svg className={`w-5 h-5 ${portfolio.paymentVerified ? 'text-white' : 'text-amber-600'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                    </svg>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-zinc-900">{portfolio.payoutMethod === 'bank' ? 'Bank Transfer' : 'UPI'}</p>
+                    {portfolio.payoutMethod === 'upi' ? (
+                      <p className="text-xs text-zinc-500 mt-0.5">UPI ID: <span className="font-medium text-zinc-700">{portfolio.upiId}</span></p>
+                    ) : (
+                      <div className="text-xs text-zinc-500 mt-0.5 space-y-0.5">
+                        <p>Account: <span className="font-medium text-zinc-700">****{portfolio.bankAccountNumber?.slice(-4)}</span></p>
+                        <p>IFSC: <span className="font-medium text-zinc-700">{portfolio.ifscCode}</span> · Name: <span className="font-medium text-zinc-700">{portfolio.accountHolderName}</span></p>
+                      </div>
+                    )}
+                  </div>
+                  <button onClick={() => { setEditingPayout(true) }}
+                    className="border border-zinc-200 bg-white hover:bg-zinc-50 text-zinc-700 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors flex-shrink-0">
+                    Edit
+                  </button>
+                </div>
+
+                {/* Verify prompt */}
+                {!portfolio.paymentVerified && (
+                  <div className="mt-3 pt-3 border-t border-amber-100 flex items-center justify-between gap-3">
+                    <div className="flex-1">
+                      <p className="text-xs font-medium text-amber-800">Account not yet verified</p>
+                      <p className="text-xs text-amber-600 mt-0.5">Verify to confirm your account and unlock the Verified badge on your profile</p>
+                    </div>
+                    <button onClick={verifyPayoutDetails} disabled={verifyLoading}
+                      className="bg-zinc-900 hover:bg-zinc-800 disabled:opacity-50 text-white text-xs font-semibold px-4 py-2 rounded-lg transition-colors flex-shrink-0 flex items-center gap-1.5">
+                      {verifyLoading ? (
+                        <><div className="w-3 h-3 border border-white border-t-transparent rounded-full animate-spin" /> Verifying…</>
+                      ) : (
+                        <><svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg> Verify now</>
+                      )}
+                    </button>
+                  </div>
+                )}
+
+                {/* Already verified confirmation */}
+                {portfolio.paymentVerified && (
+                  <div className="mt-3 pt-3 border-t border-zinc-200 flex items-center gap-2">
+                    <svg className="w-4 h-4 text-zinc-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
+                    <p className="text-xs text-zinc-600">Account verified — you will receive payouts at this address when milestones are released</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Add / Edit form */}
+            {editingPayout && (
+              <div className="border border-zinc-200 rounded-xl p-4 space-y-4 mb-3">
+                <p className="text-xs font-semibold text-zinc-700 uppercase tracking-wide">Select payout method</p>
+                <div className="flex gap-2">
+                  {['upi', 'bank'].map(m => (
+                    <button key={m} onClick={() => setPayoutForm(f => ({ ...f, payoutMethod: m }))}
+                      className={`flex-1 py-2.5 rounded-lg text-sm font-semibold border transition-colors ${payoutForm.payoutMethod === m ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-600 border-zinc-200 hover:bg-zinc-50'}`}>
+                      {m === 'upi' ? 'UPI' : 'Bank Transfer'}
+                    </button>
+                  ))}
+                </div>
+
+                {payoutForm.payoutMethod === 'upi' && (
+                  <div>
+                    <label className="block text-xs font-medium text-zinc-700 mb-1.5">UPI ID</label>
+                    <input type="text" value={payoutForm.upiId} placeholder="yourname@upi or phone@okaxis"
+                      onChange={e => setPayoutForm(f => ({ ...f, upiId: e.target.value }))}
+                      className="w-full border border-zinc-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-zinc-300" />
+                    <p className="text-xs text-zinc-400 mt-1">Must contain @ — e.g. name@upi, number@paytm</p>
+                  </div>
+                )}
+
+                {payoutForm.payoutMethod === 'bank' && (
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-xs font-medium text-zinc-700 mb-1.5">Account Holder Name</label>
+                      <input type="text" value={payoutForm.accountHolderName} placeholder="Full name as on bank records"
+                        onChange={e => setPayoutForm(f => ({ ...f, accountHolderName: e.target.value }))}
+                        className="w-full border border-zinc-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-zinc-300" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-zinc-700 mb-1.5">Account Number</label>
+                      <input type="text" value={payoutForm.bankAccountNumber} placeholder="9–18 digit account number"
+                        onChange={e => setPayoutForm(f => ({ ...f, bankAccountNumber: e.target.value.replace(/\D/g, '') }))}
+                        className="w-full border border-zinc-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-zinc-300" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-zinc-700 mb-1.5">IFSC Code</label>
+                      <input type="text" value={payoutForm.ifscCode} placeholder="e.g. HDFC0001234"
+                        maxLength={11}
+                        onChange={e => setPayoutForm(f => ({ ...f, ifscCode: e.target.value.toUpperCase() }))}
+                        className="w-full border border-zinc-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-zinc-300 uppercase" />
+                      <p className="text-xs text-zinc-400 mt-1">4 letters + 0 + 6 alphanumeric — e.g. HDFC0001234</p>
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex gap-2 pt-1">
+                  <button onClick={savePayoutDetails} disabled={payoutLoading || !payoutForm.payoutMethod}
+                    className="flex-1 bg-zinc-900 hover:bg-zinc-800 disabled:opacity-50 text-white text-sm font-semibold py-2.5 rounded-lg transition-colors">
+                    {payoutLoading ? 'Saving...' : 'Save details'}
+                  </button>
+                  {portfolio?.payoutDetailsAdded && (
+                    <button onClick={() => setEditingPayout(false)}
+                      className="border border-zinc-200 bg-white hover:bg-zinc-50 text-zinc-700 text-sm font-medium px-4 py-2 rounded-lg transition-colors">
+                      Cancel
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+
+            <p className="text-xs text-zinc-400">Payouts are processed via Razorpay after each milestone is released.</p>
           </div>
         )}
 

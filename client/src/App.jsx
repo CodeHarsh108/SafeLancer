@@ -10,16 +10,15 @@ import JobBoard from './pages/JobBoard'
 import JobDetail from './pages/JobDetail'
 import PostJob from './pages/PostJob'
 import ContractDashboard from './pages/ContractDashboard'
-import NegotiationRoom from './pages/NegotiationRoom'
 import FreelancerProfile from './pages/FreelancerProfile'
+import FreelancerBrowse from './pages/FreelancerBrowse'
 import ClientProfile from './pages/ClientProfile'
-import ChatRoom from './pages/ChatRoom'
-import InterviewRoom from './pages/InterviewRoom'
 import VerifyHash from './pages/VerifyHash'
 import AdminDashboard from './pages/AdminDashboard'
 import AuthCallback from './pages/AuthCallback'
 import GoogleComplete from './pages/GoogleComplete'
 import PaymentSettings from './pages/PaymentSettings'
+import BannedPage from './pages/BannedPage'
 
 function DashboardRedirect() {
   const user = JSON.parse(localStorage.getItem('user') || '{}')
@@ -51,6 +50,7 @@ export default function App() {
       />
       <Routes>
         {/* Public */}
+        <Route path="/banned" element={<BannedPage />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/verify/:hash" element={<VerifyHash />} />
@@ -74,18 +74,13 @@ export default function App() {
         <Route path="/jobs/:id" element={<ProtectedRoute><JobDetail /></ProtectedRoute>} />
 
         {/* Freelancers */}
+        <Route path="/freelancers" element={<ProtectedRoute><FreelancerBrowse /></ProtectedRoute>} />
         <Route path="/freelancers/:userId" element={<ProtectedRoute><FreelancerProfile /></ProtectedRoute>} />
         <Route path="/clients/:userId" element={<ProtectedRoute><ClientProfile /></ProtectedRoute>} />
 
         {/* Contracts & Milestones */}
         <Route path="/contracts/:id" element={<ProtectedRoute><ContractDashboard /></ProtectedRoute>} />
 
-        {/* Negotiations */}
-        <Route path="/negotiations/:id" element={<ProtectedRoute><NegotiationRoom /></ProtectedRoute>} />
-
-        {/* Chat & Video */}
-        <Route path="/chat/:contractId" element={<ProtectedRoute><ChatRoom /></ProtectedRoute>} />
-        <Route path="/interview/:meetingRoomId" element={<ProtectedRoute><InterviewRoom /></ProtectedRoute>} />
 
         {/* Admin */}
         <Route path="/admin" element={<ProtectedRoute role="admin"><AdminDashboard /></ProtectedRoute>} />

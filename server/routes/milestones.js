@@ -5,94 +5,38 @@ const path = require('path');
 const crypto = require('crypto');
 const fs = require('fs');
 const Milestone = require('../models/Milestone');
+const Contract = require('../models/Contract');
+const Job = require('../models/Job');
 const Dispute = require('../models/Dispute');
 const auth = require('../middleware/auth');
 const { milestoneTransition } = require('../services/stateMachine');
+const { performRelease } = require('../services/releaseService');
+const isTestMode = require('../utils/isTestMode');
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, path.join(__dirname, '../uploads')),
   filename: (req, file, cb) => cb(null, Date.now() + '-' + file.originalname.replace(/\s/g, '_'))
 });
-const upload = multer({ storage, limits: { fileSize: 50 * 1024 * 1024 } });
+const upload = multer({ storage, limits: { fileSize: 100 * 1024 * 1024 } });
 
-// Initiate Razorpay payout to freelancer when milestone is released
-async function initiateFreelancerPayout(milestone) {
-  try {
-    const Portfolio = require('../models/Portfolio');
-    const freelancerPortfolio = await Portfolio.findOne({ user: milestone.freelancer });
-    if (!freelancerPortfolio?.payoutDetailsAdded) return; // no payout details saved yet
+// Helper: compile evidence summary for a milestone
+async function compileEvidence(milestone) {
+  const hashes = [];
+  const videoHashes = [];
+  if (milestone.submissionFileHash) hashes.push(milestone.submissionFileHash);
+  if (milestone.submissionVideoHash) videoHashes.push(milestone.submissionVideoHash);
 
-    const isTestMode = !process.env.RAZORPAY_KEY_ID || process.env.RAZORPAY_KEY_ID.includes('placeholder');
+  const inaccuracyNotes = [];
+  if (milestone.inaccuracyNote) inaccuracyNotes.push(milestone.inaccuracyNote);
 
-    if (isTestMode) {
-      await Milestone.findByIdAndUpdate(milestone._id, {
-        payoutId: 'payout_test_' + Date.now(),
-        payoutStatus: 'processed',
-        payoutInitiatedAt: new Date()
-      });
-      return;
-    }
-
-    const Razorpay = require('razorpay');
-    const razorpay = new Razorpay({ key_id: process.env.RAZORPAY_KEY_ID, key_secret: process.env.RAZORPAY_KEY_SECRET });
-    const User = require('../models/User');
-    const freelancer = await User.findById(milestone.freelancer);
-
-    // Create or reuse Razorpay Contact
-    let contactId = freelancerPortfolio.razorpayContactId;
-    if (!contactId) {
-      const contact = await razorpay.contacts.create({
-        name: freelancer?.name || 'Freelancer',
-        email: freelancer?.email || '',
-        type: 'vendor',
-        reference_id: milestone.freelancer.toString()
-      });
-      contactId = contact.id;
-      await Portfolio.findOneAndUpdate({ user: milestone.freelancer }, { razorpayContactId: contactId });
-    }
-
-    // Create or reuse Fund Account
-    let fundAccountId = freelancerPortfolio.razorpayFundAccountId;
-    if (!fundAccountId) {
-      const faData = { contact_id: contactId };
-      if (freelancerPortfolio.payoutMethod === 'upi') {
-        faData.account_type = 'vpa';
-        faData.vpa = { address: freelancerPortfolio.upiId };
-      } else {
-        faData.account_type = 'bank_account';
-        faData.bank_account = {
-          name: freelancerPortfolio.accountHolderName,
-          ifsc: freelancerPortfolio.ifscCode,
-          account_number: freelancerPortfolio.bankAccountNumber
-        };
-      }
-      const fa = await razorpay.fundAccount.create(faData);
-      fundAccountId = fa.id;
-      await Portfolio.findOneAndUpdate({ user: milestone.freelancer }, { razorpayFundAccountId: fundAccountId });
-    }
-
-    // Create Payout
-    const payout = await razorpay.payouts.create({
-      account_number: process.env.RAZORPAY_ACCOUNT_NUMBER,
-      fund_account_id: fundAccountId,
-      amount: Math.round(milestone.amount * 100),
-      currency: 'INR',
-      mode: freelancerPortfolio.payoutMethod === 'upi' ? 'UPI' : 'IMPS',
-      purpose: 'payout',
-      queue_if_low_balance: true,
-      reference_id: milestone._id.toString(),
-      narration: `FreeLock - ${milestone.title}`
-    });
-
-    await Milestone.findByIdAndUpdate(milestone._id, {
-      payoutId: payout.id,
-      payoutStatus: 'processing',
-      payoutInitiatedAt: new Date()
-    });
-  } catch (err) {
-    console.error('Payout initiation failed for milestone', milestone._id, ':', err.message);
-    await Milestone.findByIdAndUpdate(milestone._id, { payoutStatus: 'failed' });
-  }
+  return {
+    submissionHashes: hashes,
+    videoHashes,
+    deadlineExtensionCount: milestone.deadlineExtensions?.length || 0,
+    inaccuracyNotes,
+    autoCompiled: true,
+    compiledAt: new Date()
+  };
 }
 
 // GET /api/milestones/contract/:contractId
@@ -116,17 +60,22 @@ router.get('/:id', auth, async (req, res) => {
   }
 });
 
-// POST /api/milestones/:id/fund — client creates Razorpay order (escrow hold)
-// Test mode: RAZORPAY_KEY_ID missing or contains 'placeholder' → uses mock order_test_* id
+// POST /api/milestones/:id/fund
 router.post('/:id/fund', auth, async (req, res) => {
   try {
     const milestone = await Milestone.findById(req.params.id);
     if (!milestone) return res.status(404).json({ message: 'Not found' });
     if (milestone.client.toString() !== req.user.id) return res.status(403).json({ message: 'Clients only' });
 
-    const isTestMode = !process.env.RAZORPAY_KEY_ID || process.env.RAZORPAY_KEY_ID.includes('placeholder');
+    // Enforce sequential phase funding — phase N requires phase N-1 to be approved/released
+    if (!milestone.isAdvance && milestone.milestoneNumber > 1) {
+      const prev = await Milestone.findOne({ contract: milestone.contract, milestoneNumber: milestone.milestoneNumber - 1 });
+      if (prev && !['approved', 'released'].includes(prev.status)) {
+        return res.status(400).json({ message: `Phase ${milestone.milestoneNumber - 1} must be approved before funding Phase ${milestone.milestoneNumber}` });
+      }
+    }
 
-    if (isTestMode) {
+    if (isTestMode()) {
       milestone.razorpayOrderId = 'order_test_' + Date.now();
     } else {
       const Razorpay = require('razorpay');
@@ -142,13 +91,21 @@ router.post('/:id/fund', auth, async (req, res) => {
 
     await milestone.save();
     const updated = await milestoneTransition(milestone._id, 'funded');
+
+    // Advance payment funded in test mode → activate contract and start the job
+    if (milestone.isAdvance && isTestMode()) {
+      await Contract.findByIdAndUpdate(milestone.contract, { status: 'active' });
+      const contract = await Contract.findById(milestone.contract);
+      if (contract) await Job.findByIdAndUpdate(contract.job, { status: 'in_progress' });
+    }
+
     res.json({ ...updated.toObject(), razorpayOrderId: updated.razorpayOrderId, razorpayKeyId: process.env.RAZORPAY_KEY_ID });
   } catch (err) {
     res.status(500).json({ message: 'Server error', error: err.message });
   }
 });
 
-// POST /api/milestones/:id/verify-payment — save razorpayPaymentId after successful checkout
+// POST /api/milestones/:id/verify-payment
 router.post('/:id/verify-payment', auth, async (req, res) => {
   try {
     const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
@@ -156,7 +113,6 @@ router.post('/:id/verify-payment', auth, async (req, res) => {
     if (!milestone) return res.status(404).json({ message: 'Not found' });
     if (milestone.client.toString() !== req.user.id) return res.status(403).json({ message: 'Clients only' });
 
-    // Verify Razorpay signature
     const body = razorpay_order_id + '|' + razorpay_payment_id;
     const expectedSignature = crypto.createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
       .update(body).digest('hex');
@@ -167,52 +123,57 @@ router.post('/:id/verify-payment', auth, async (req, res) => {
 
     milestone.razorpayPaymentId = razorpay_payment_id;
     await milestone.save();
-    res.json({ success: true });
+
+    // If this is the advance milestone, activate the contract and start the job
+    // Note: milestone is already 'funded' from the /fund call — do NOT transition again
+    if (milestone.isAdvance) {
+      await Contract.findByIdAndUpdate(milestone.contract, { status: 'active' });
+      const contract = await Contract.findById(milestone.contract);
+      if (contract) await Job.findByIdAndUpdate(contract.job, { status: 'in_progress' });
+    }
+
+    res.json({ success: true, milestoneId: milestone._id, contractId: milestone.contract });
   } catch (err) {
     res.status(500).json({ message: 'Server error', error: err.message });
   }
 });
 
-// POST /api/milestones/:id/start — freelancer marks in_progress
-router.post('/:id/start', auth, async (req, res) => {
+
+// POST /api/milestones/:id/submit — freelancer uploads code file + demo video
+router.post('/:id/submit', auth, upload.fields([{ name: 'file', maxCount: 1 }, { name: 'video', maxCount: 1 }]), async (req, res) => {
   try {
     const milestone = await Milestone.findById(req.params.id);
     if (!milestone) return res.status(404).json({ message: 'Not found' });
     if (milestone.freelancer.toString() !== req.user.id) return res.status(403).json({ message: 'Freelancers only' });
-    const updated = await milestoneTransition(milestone._id, 'in_progress');
-    res.json(updated);
-  } catch (err) {
-    res.status(500).json({ message: 'Server error', error: err.message });
-  }
-});
+    if (milestone.isAdvance) return res.status(400).json({ message: 'Advance payment phase does not require file submission' });
 
-// POST /api/milestones/:id/submit — freelancer uploads work
-router.post('/:id/submit', auth, upload.single('file'), async (req, res) => {
-  try {
-    const milestone = await Milestone.findById(req.params.id);
-    if (!milestone) return res.status(404).json({ message: 'Not found' });
-    if (milestone.freelancer.toString() !== req.user.id) return res.status(403).json({ message: 'Freelancers only' });
-
-    let fileHash = req.body.fileHash;
-    let fileUrl = req.body.fileUrl;
-
-    if (req.file) {
-      const buffer = fs.readFileSync(req.file.path);
-      fileHash = crypto.createHash('sha256').update(buffer).digest('hex');
-      fileUrl = '/uploads/' + req.file.filename;
+    const allowedStates = ['funded', 'in_progress', 'inaccurate_1'];
+    if (!allowedStates.includes(milestone.status)) {
+      return res.status(400).json({ message: `Cannot submit in current state: ${milestone.status}` });
     }
 
-    if (!fileHash) {
-      fileHash = crypto.createHash('sha256').update(req.body.submissionNote || Date.now().toString()).digest('hex');
-    }
+    const files = req.files || {};
+
+    // Both code file and demo video are required
+    if (!files.file?.[0]) return res.status(400).json({ message: 'Code/deliverable file is required' });
+    if (!files.video?.[0]) return res.status(400).json({ message: 'Demo video is required' });
 
     milestone.submissionNote = req.body.submissionNote || '';
-    milestone.submissionFileHash = fileHash;
-    milestone.submissionFileUrl = fileUrl;
+
+    if (files.file?.[0]) {
+      const codeBuffer = fs.readFileSync(files.file[0].path);
+      milestone.submissionFileHash = crypto.createHash('sha256').update(codeBuffer).digest('hex');
+      milestone.submissionFileUrl = '/uploads/' + files.file[0].filename;
+    }
+    if (files.video?.[0]) {
+      const videoBuffer = fs.readFileSync(files.video[0].path);
+      milestone.submissionVideoHash = crypto.createHash('sha256').update(videoBuffer).digest('hex');
+      milestone.submissionVideoUrl = '/uploads/' + files.video[0].filename;
+    }
     await milestone.save();
 
-    // Two sequential transitions in one request: in_progress → submitted → review
-    // submitted sets submittedAt + autoReleaseAt (72h); review is the state clients act on
+    // Transition: funded/in_progress → submitted → review in one call
+    if (milestone.status === 'funded') await milestoneTransition(milestone._id, 'in_progress');
     await milestoneTransition(milestone._id, 'submitted');
     const updated = await milestoneTransition(milestone._id, 'review');
     res.json(updated);
@@ -221,137 +182,114 @@ router.post('/:id/submit', auth, upload.single('file'), async (req, res) => {
   }
 });
 
-// POST /api/milestones/:id/review — client approves or marks inaccurate
-router.post('/:id/review', auth, async (req, res) => {
+// POST /api/milestones/:id/extend-deadline — client extends deadline without changing status
+router.post('/:id/extend-deadline', auth, async (req, res) => {
   try {
     const milestone = await Milestone.findById(req.params.id);
     if (!milestone) return res.status(404).json({ message: 'Not found' });
     if (milestone.client.toString() !== req.user.id) return res.status(403).json({ message: 'Clients only' });
 
-    const { approved, note, inaccuracyNote, newDeadline } = req.body;
-
-    if (approved) {
-      milestone.reviewNote = note || '';
-      await milestone.save();
-      const updated = await milestoneTransition(milestone._id, 'approved');
-      return res.json(updated);
+    const allowedStates = ['funded', 'in_progress', 'submitted', 'review', 'inaccurate_1'];
+    if (!allowedStates.includes(milestone.status)) {
+      return res.status(400).json({ message: `Cannot extend deadline in status: ${milestone.status}` });
     }
 
-    // Inaccurate
-    milestone.inaccuracyCount += 1;
-    milestone.inaccuracyNote = inaccuracyNote || note || '';
+    const { newDeadline, reason } = req.body;
+    if (!newDeadline) return res.status(400).json({ message: 'newDeadline is required' });
 
-    if (milestone.inaccuracyCount === 1) {
-      milestone.originalDeadline = milestone.deadline;
-      milestone.deadline = newDeadline ? new Date(newDeadline) : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-      milestone.deadlineExtendedAt = new Date();
-      await milestone.save();
-      const updated = await milestoneTransition(milestone._id, 'inaccurate_1');
-      return res.json(updated);
-    }
+    const nd = new Date(newDeadline);
+    if (nd <= new Date()) return res.status(400).json({ message: 'New deadline must be in the future' });
 
-    if (milestone.inaccuracyCount >= 2) {
-      await milestone.save();
-      await milestoneTransition(milestone._id, 'inaccurate_2');
-      const updated = await milestoneTransition(milestone._id, 'disputed');
+    if (!milestone.originalDeadline) milestone.originalDeadline = milestone.deadline;
+    milestone.deadline = nd;
+    milestone.deadlineExtendedAt = new Date();
+    milestone.deadlineExtensions.push({
+      extendedAt: new Date(),
+      newDeadline: nd,
+      reason: reason || '',
+      extendedBy: req.user.id
+    });
 
-      // Auto-create dispute
-      await Dispute.create({
-        milestone: milestone._id,
-        contract: milestone.contract,
-        raisedBy: req.user.id,
-        type: 'milestone',
-        reason: `Auto-dispute: Milestone "${milestone.title}" rejected twice. First: ${milestone.inaccuracyNote}. Second: ${inaccuracyNote || note}`
-      });
-
-      return res.json(updated);
-    }
+    await milestone.save();
+    res.json(milestone);
   } catch (err) {
     res.status(500).json({ message: 'Server error', error: err.message });
   }
 });
 
-// POST /api/milestones/:id/release — client releases payment
+// POST /api/milestones/:id/review — client approves or disapproves (triggers reschedule)
+router.post('/:id/review', auth, async (req, res) => {
+  try {
+    const milestone = await Milestone.findById(req.params.id);
+    if (!milestone) return res.status(404).json({ message: 'Not found' });
+    if (milestone.client.toString() !== req.user.id) return res.status(403).json({ message: 'Clients only' });
+    if (milestone.isAdvance) return res.status(400).json({ message: 'Advance payment phase does not require review' });
+    if (milestone.status !== 'review') return res.status(400).json({ message: 'Phase is not in review state' });
+
+    const { approved, note, inaccuracyNote } = req.body;
+
+    if (approved) {
+      milestone.reviewNote = note || '';
+      await milestone.save();
+      await milestoneTransition(milestone._id, 'approved');
+      // Auto-release immediately on approval — no separate release step needed
+      const updated = await performRelease(milestone);
+      return res.json(updated);
+    }
+
+    // Disapproval — increment reschedule count
+    milestone.inaccuracyCount += 1;
+    milestone.inaccuracyNote = inaccuracyNote || note || '';
+
+    const maxRev = milestone.maxRevisions || 2;
+
+    if (milestone.inaccuracyCount >= maxRev) {
+      // Reschedule limit reached → auto-dispute
+      await milestone.save();
+      const updated = await milestoneTransition(milestone._id, 'disputed');
+      const evidence = await compileEvidence(milestone);
+      await Dispute.create({
+        milestone: milestone._id,
+        contract: milestone.contract,
+        raisedBy: req.user.id,
+        type: 'milestone',
+        reason: `Auto-dispute: "${milestone.title}" disapproved ${milestone.inaccuracyCount}× (limit ${maxRev}). Last note: ${milestone.inaccuracyNote}`,
+        evidenceSummary: evidence
+      });
+      return res.json(updated);
+    }
+
+    // Reschedule: extend deadline by 10% of original phase time
+    if (!milestone.originalDeadline) milestone.originalDeadline = milestone.deadline;
+    const originalDuration = milestone.originalDeadline.getTime() - new Date(milestone.createdAt).getTime();
+    const extensionMs = Math.round(originalDuration * 0.1);
+    const baseDate = Math.max(milestone.deadline.getTime(), Date.now());
+    const nd = new Date(baseDate + extensionMs);
+
+    milestone.deadline = nd;
+    milestone.deadlineExtendedAt = new Date();
+    milestone.deadlineExtensions.push({
+      extendedAt: new Date(),
+      newDeadline: nd,
+      reason: `Disapproval #${milestone.inaccuracyCount}: ${milestone.inaccuracyNote}`,
+      extendedBy: req.user.id
+    });
+    await milestone.save();
+    const updated = await milestoneTransition(milestone._id, 'inaccurate_1');
+    return res.json(updated);
+  } catch (err) {
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+});
+
+// POST /api/milestones/:id/release — kept for dispute resolution / admin use
 router.post('/:id/release', auth, async (req, res) => {
   try {
     const milestone = await Milestone.findById(req.params.id);
     if (!milestone) return res.status(404).json({ message: 'Not found' });
     if (milestone.client.toString() !== req.user.id) return res.status(403).json({ message: 'Clients only' });
 
-    const updated = await milestoneTransition(milestone._id, 'released');
-
-    // Initiate payout to freelancer
-    await initiateFreelancerPayout(milestone);
-
-    // Business rule: releasing Phase 1 (milestoneNumber===1) also unlocks the advance payment
-    // Advance = milestoneNumber===0, isAdvance=true — it stays in 'approved' until Phase 1 releases
-    if (milestone.milestoneNumber === 1) {
-      const advanceMilestone = await Milestone.findOne({ contract: milestone.contract, milestoneNumber: 0, isAdvance: true });
-      if (advanceMilestone && advanceMilestone.status === 'approved') {
-        await milestoneTransition(advanceMilestone._id, 'released');
-      }
-    }
-
-    // Check if all milestones are now released → mark contract completed + update stats
-    // Re-fetch fresh state after all transitions above have completed
-    const allMilestones = await Milestone.find({ contract: milestone.contract });
-    const allReleased = allMilestones.every(m => m.status === 'released');
-
-    if (allReleased) {
-      const Contract = require('../models/Contract');
-      const Portfolio = require('../models/Portfolio');
-      const User = require('../models/User');
-      const Job = require('../models/Job');
-
-      const contract = await Contract.findByIdAndUpdate(
-        milestone.contract,
-        { status: 'completed' },
-        { new: true }
-      );
-
-      if (contract) {
-        // Update job status to completed
-        await Job.findByIdAndUpdate(contract.job, { status: 'completed' });
-
-        // Update client portfolio: projectsCompleted + rolling avgBudget
-        const clientPortfolio = await Portfolio.findOne({ user: contract.client });
-        if (clientPortfolio) {
-          const newCompleted = (clientPortfolio.projectsCompleted || 0) + 1;
-          const oldAvg = clientPortfolio.avgBudget || 0;
-          const newAvg = Math.round((oldAvg * (newCompleted - 1) + contract.amount) / newCompleted);
-          await Portfolio.findOneAndUpdate(
-            { user: contract.client },
-            { projectsCompleted: newCompleted, avgBudget: newAvg }
-          );
-        }
-
-        // Update freelancer onTimeDeliveryRate (rolling avg across all completed contracts)
-        const phaseMilestones = allMilestones.filter(m => !m.isAdvance);
-        const onTimeCount = phaseMilestones.filter(m =>
-          m.submittedAt && m.deadline && new Date(m.submittedAt) <= new Date(m.deadline)
-        ).length;
-        const contractRate = phaseMilestones.length > 0
-          ? Math.round((onTimeCount / phaseMilestones.length) * 100)
-          : 100;
-
-        // Rolling average of onTimeDeliveryRate across all completed contracts for this freelancer
-        const completedContracts = await Contract.find({
-          freelancer: contract.freelancer,
-          status: 'completed',
-          _id: { $ne: contract._id }
-        });
-        const freelancer = await User.findById(contract.freelancer);
-        if (freelancer) {
-          const prevCount = completedContracts.length;
-          const prevRate = freelancer.onTimeDeliveryRate || 100;
-          const newRate = prevCount > 0
-            ? Math.round((prevRate * prevCount + contractRate) / (prevCount + 1))
-            : contractRate;
-          await User.findByIdAndUpdate(contract.freelancer, { onTimeDeliveryRate: newRate });
-        }
-      }
-    }
-
+    const updated = await performRelease(milestone);
     res.json(updated);
   } catch (err) {
     res.status(500).json({ message: 'Server error', error: err.message });
@@ -370,6 +308,37 @@ router.post('/:id/schedule-meeting', auth, async (req, res) => {
     res.json(milestone);
   } catch (err) {
     res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// GET /api/milestones/file/:milestoneId/:type — protected file download
+// Client can only access after phase is approved; freelancer can always access their own uploads
+router.get('/file/:milestoneId/:type', auth, async (req, res) => {
+  try {
+    const milestone = await Milestone.findById(req.params.milestoneId);
+    if (!milestone) return res.status(404).json({ message: 'Not found' });
+
+    const isClient = milestone.client.toString() === req.user.id;
+    const isFreelancer = milestone.freelancer.toString() === req.user.id;
+    if (!isClient && !isFreelancer) return res.status(403).json({ message: 'Forbidden' });
+
+    if (isClient) {
+      const isVideo = req.params.type === 'video';
+      const videoAllowed = ['review', 'approved', 'released', 'inaccurate_1', 'disputed'].includes(milestone.status);
+      const codeAllowed = ['approved', 'released'].includes(milestone.status);
+      if (isVideo && !videoAllowed) return res.status(403).json({ message: 'Demo video will be available once the freelancer submits deliverables' });
+      if (!isVideo && !codeAllowed) return res.status(403).json({ message: 'Code file is locked until the phase is approved' });
+    }
+
+    const fileUrl = req.params.type === 'video' ? milestone.submissionVideoUrl : milestone.submissionFileUrl;
+    if (!fileUrl) return res.status(404).json({ message: 'File not uploaded yet' });
+
+    const filePath = path.join(__dirname, '..', fileUrl);
+    if (!fs.existsSync(filePath)) return res.status(404).json({ message: 'File not found on disk' });
+
+    res.sendFile(filePath);
+  } catch (err) {
+    res.status(500).json({ message: 'Server error', error: err.message });
   }
 });
 

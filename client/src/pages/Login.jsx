@@ -57,7 +57,7 @@ export default function Login() {
     <div className="min-h-screen bg-zinc-100 flex flex-col items-center justify-center p-4">
 
       <div className={`mb-8 text-center ${hx}`}>
-        <div className="text-xl font-bold text-zinc-900 tracking-tight">FreeLock</div>
+        <div className="text-xl font-bold text-zinc-900 tracking-tight">SafeLancer</div>
         <div className="text-sm text-zinc-500 mt-1">Secure Freelancing Platform</div>
       </div>
 
