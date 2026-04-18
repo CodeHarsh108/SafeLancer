@@ -46,7 +46,12 @@ const milestoneSchema = new mongoose.Schema({
   meetingStatus: { type: String, enum: ['not_scheduled', 'scheduled', 'completed'], default: 'not_scheduled' },
   payoutId:           { type: String, default: '' },
   payoutStatus:       { type: String, enum: ['pending', 'processing', 'processed', 'failed', ''], default: '' },
-  payoutInitiatedAt:  Date
+  payoutInitiatedAt:  Date,
+  clientFee:          { type: Number, default: 0 },
+  freelancerFee:      { type: Number, default: 0 },
+  platformFee:        { type: Number, default: 0 },
+  clientTotal:        { type: Number, default: 0 },
+  freelancerPayout:   { type: Number, default: 0 }
 }, { timestamps: true });
 
 milestoneSchema.index({ contract: 1, isAdvance: 1 });

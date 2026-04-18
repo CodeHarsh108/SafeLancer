@@ -3,6 +3,7 @@ const router = express.Router();
 const Contract = require('../models/Contract');
 const Milestone = require('../models/Milestone');
 const auth = require('../middleware/auth');
+const isTestMode = require('../utils/isTestMode');
 
 // GET /api/contracts/my-contracts — client
 router.get('/my-contracts', auth, async (req, res) => {
@@ -68,14 +69,14 @@ router.post('/:id/withdraw', auth, async (req, res) => {
 
     if (completionRatio <= 0.5) {
       // Free withdrawal — refund all captured Razorpay payments
-      const isTestMode = !process.env.RAZORPAY_KEY_ID || process.env.RAZORPAY_KEY_ID.includes('placeholder');
       for (const m of milestones) {
         if (['funded', 'in_progress'].includes(m.status)) {
-          if (!isTestMode && m.razorpayPaymentId && !m.razorpayPaymentId.startsWith('pay_test_')) {
+          if (!isTestMode() && m.razorpayPaymentId && !m.razorpayPaymentId.startsWith('pay_test_')) {
             try {
               const Razorpay = require('razorpay');
               const razorpay = new Razorpay({ key_id: process.env.RAZORPAY_KEY_ID, key_secret: process.env.RAZORPAY_KEY_SECRET });
-              await razorpay.payments.refund(m.razorpayPaymentId, { amount: Math.round(m.amount * 100) });
+              const refundAmt = m.clientTotal || m.amount;
+              await razorpay.payments.refund(m.razorpayPaymentId, { amount: Math.round(refundAmt * 100) });
             } catch (e) {}
           }
           m.status = 'refunded';

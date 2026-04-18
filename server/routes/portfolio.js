@@ -1,14 +1,13 @@
 const express = require('express');
 const router = express.Router();
 const multer = require('multer');
-const path = require('path');
 const crypto = require('crypto');
-const fs = require('fs');
 const axios = require('axios');
 const Portfolio = require('../models/Portfolio');
 const auth = require('../middleware/auth');
 const { calcCompletion } = require('../utils/profileCompletion');
 const isTestMode = require('../utils/isTestMode');
+const { uploadToImageKit } = require('../utils/imagekit');
 
 function razorpayClient() {
   const Razorpay = require('razorpay');
@@ -19,11 +18,7 @@ function rzpAuth() {
   return { username: process.env.RAZORPAY_KEY_ID, password: process.env.RAZORPAY_KEY_SECRET };
 }
 
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, path.join(__dirname, '../uploads')),
-  filename: (req, file, cb) => cb(null, Date.now() + '-' + file.originalname.replace(/\s/g, '_'))
-});
-const upload = multer({ storage, limits: { fileSize: 10 * 1024 * 1024 } });
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
 // GET /api/portfolio/:userId — public
 router.get('/:userId', async (req, res) => {
@@ -80,7 +75,7 @@ router.post('/update', auth, async (req, res) => {
 router.post('/upload-avatar', auth, upload.single('avatar'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ message: 'No file uploaded' });
-    const avatarUrl = '/uploads/' + req.file.filename;
+    const avatarUrl = await uploadToImageKit(req.file.buffer, req.file.originalname, '/safelancer/avatars');
     const existing = await Portfolio.findOne({ user: req.user.id });
     const portfolio = await Portfolio.findOneAndUpdate(
       { user: req.user.id },
@@ -301,9 +296,9 @@ router.post('/verify-payout', auth, async (req, res) => {
 router.post('/upload-sample', auth, upload.single('file'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ message: 'No file uploaded' });
-    const buffer = fs.readFileSync(req.file.path);
+    const buffer = req.file.buffer;
     const fileHash = crypto.createHash('sha256').update(buffer).digest('hex');
-    const fileUrl = '/uploads/' + req.file.filename;
+    const fileUrl = await uploadToImageKit(buffer, req.file.originalname, '/safelancer/samples');
     const sample = {
       title: req.body.title || req.file.originalname,
       description: req.body.description || '',
@@ -329,7 +324,7 @@ router.post('/upload-sample', auth, upload.single('file'), async (req, res) => {
 router.post('/upload-resume', auth, upload.single('resume'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ message: 'No file uploaded' });
-    const resumeUrl = '/uploads/' + req.file.filename;
+    const resumeUrl = await uploadToImageKit(req.file.buffer, req.file.originalname, '/safelancer/resumes');
     const portfolio = await Portfolio.findOneAndUpdate(
       { user: req.user.id },
       { $set: { resumeUrl } },

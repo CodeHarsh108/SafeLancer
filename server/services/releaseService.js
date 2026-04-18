@@ -27,7 +27,11 @@ async function recordTransaction(milestone, amount, type, payoutId = '') {
 }
 
 async function initiateFreelancerPayout(milestone, overrideAmount, overrideType) {
-  const amount = overrideAmount != null ? overrideAmount : milestone.amount;
+  // Use stored freelancerPayout (amount − 2% fee) unless caller overrides (e.g. dispute split)
+  const baseAmount = milestone.freelancerPayout && milestone.freelancerPayout > 0
+    ? milestone.freelancerPayout
+    : Math.round(milestone.amount * 0.98);
+  const amount = overrideAmount != null ? overrideAmount : baseAmount;
   const type = overrideType || (milestone.isAdvance ? 'advance_payment' : 'phase_payment');
 
   try {

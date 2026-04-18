@@ -1,9 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const multer = require('multer');
-const path = require('path');
 const crypto = require('crypto');
-const fs = require('fs');
 const Milestone = require('../models/Milestone');
 const Contract = require('../models/Contract');
 const Job = require('../models/Job');
@@ -12,12 +10,9 @@ const auth = require('../middleware/auth');
 const { milestoneTransition } = require('../services/stateMachine');
 const { performRelease } = require('../services/releaseService');
 const isTestMode = require('../utils/isTestMode');
+const { uploadToImageKit } = require('../utils/imagekit');
 
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, path.join(__dirname, '../uploads')),
-  filename: (req, file, cb) => cb(null, Date.now() + '-' + file.originalname.replace(/\s/g, '_'))
-});
-const upload = multer({ storage, limits: { fileSize: 100 * 1024 * 1024 } });
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 100 * 1024 * 1024 } });
 
 // Helper: compile evidence summary for a milestone
 async function compileEvidence(milestone) {
@@ -75,13 +70,26 @@ router.post('/:id/fund', auth, async (req, res) => {
       }
     }
 
+    // Calculate 2% platform fee on both sides
+    const clientFee = Math.round(milestone.amount * 0.02);
+    const freelancerFee = Math.round(milestone.amount * 0.02);
+    const clientTotal = milestone.amount + clientFee;
+    const freelancerPayout = milestone.amount - freelancerFee;
+    const platformFee = clientFee + freelancerFee;
+
+    milestone.clientFee = clientFee;
+    milestone.freelancerFee = freelancerFee;
+    milestone.platformFee = platformFee;
+    milestone.clientTotal = clientTotal;
+    milestone.freelancerPayout = freelancerPayout;
+
     if (isTestMode()) {
       milestone.razorpayOrderId = 'order_test_' + Date.now();
     } else {
       const Razorpay = require('razorpay');
       const razorpay = new Razorpay({ key_id: process.env.RAZORPAY_KEY_ID, key_secret: process.env.RAZORPAY_KEY_SECRET });
       const order = await razorpay.orders.create({
-        amount: Math.round(milestone.amount * 100),
+        amount: Math.round(clientTotal * 100),
         currency: 'INR',
         receipt: milestone._id.toString(),
         notes: { milestoneId: milestone._id.toString() }
@@ -99,7 +107,7 @@ router.post('/:id/fund', auth, async (req, res) => {
       if (contract) await Job.findByIdAndUpdate(contract.job, { status: 'in_progress' });
     }
 
-    res.json({ ...updated.toObject(), razorpayOrderId: updated.razorpayOrderId, razorpayKeyId: process.env.RAZORPAY_KEY_ID });
+    res.json({ ...updated.toObject(), razorpayOrderId: updated.razorpayOrderId, razorpayKeyId: process.env.RAZORPAY_KEY_ID, clientTotal, clientFee, freelancerFee, freelancerPayout, platformFee });
   } catch (err) {
     res.status(500).json({ message: 'Server error', error: err.message });
   }
@@ -161,14 +169,14 @@ router.post('/:id/submit', auth, upload.fields([{ name: 'file', maxCount: 1 }, {
     milestone.submissionNote = req.body.submissionNote || '';
 
     if (files.file?.[0]) {
-      const codeBuffer = fs.readFileSync(files.file[0].path);
+      const codeBuffer = files.file[0].buffer;
       milestone.submissionFileHash = crypto.createHash('sha256').update(codeBuffer).digest('hex');
-      milestone.submissionFileUrl = '/uploads/' + files.file[0].filename;
+      milestone.submissionFileUrl = await uploadToImageKit(codeBuffer, files.file[0].originalname, '/safelancer/submissions');
     }
     if (files.video?.[0]) {
-      const videoBuffer = fs.readFileSync(files.video[0].path);
+      const videoBuffer = files.video[0].buffer;
       milestone.submissionVideoHash = crypto.createHash('sha256').update(videoBuffer).digest('hex');
-      milestone.submissionVideoUrl = '/uploads/' + files.video[0].filename;
+      milestone.submissionVideoUrl = await uploadToImageKit(videoBuffer, files.video[0].originalname, '/safelancer/submissions');
     }
     await milestone.save();
 
@@ -333,10 +341,7 @@ router.get('/file/:milestoneId/:type', auth, async (req, res) => {
     const fileUrl = req.params.type === 'video' ? milestone.submissionVideoUrl : milestone.submissionFileUrl;
     if (!fileUrl) return res.status(404).json({ message: 'File not uploaded yet' });
 
-    const filePath = path.join(__dirname, '..', fileUrl);
-    if (!fs.existsSync(filePath)) return res.status(404).json({ message: 'File not found on disk' });
-
-    res.sendFile(filePath);
+    res.redirect(fileUrl);
   } catch (err) {
     res.status(500).json({ message: 'Server error', error: err.message });
   }

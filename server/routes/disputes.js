@@ -1,20 +1,14 @@
 const express = require('express');
 const router = express.Router();
 const multer = require('multer');
-const path = require('path');
 const Dispute = require('../models/Dispute');
 const Milestone = require('../models/Milestone');
 const auth = require('../middleware/auth');
 const { performRelease, performSplitRelease, performRefund } = require('../services/releaseService');
 const isTestMode = require('../utils/isTestMode');
+const { uploadToImageKit } = require('../utils/imagekit');
 
-const upload = multer({
-  storage: multer.diskStorage({
-    destination: (req, file, cb) => cb(null, path.join(__dirname, '../uploads')),
-    filename: (req, file, cb) => cb(null, Date.now() + '-' + file.originalname.replace(/\s/g, '_'))
-  }),
-  limits: { fileSize: 20 * 1024 * 1024 }
-});
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
 
 async function buildEvidenceSummary(milestone) {
   if (!milestone) return null;
@@ -89,7 +83,7 @@ router.post('/:id/evidence-file', auth, upload.single('file'), async (req, res) 
     const dispute = await Dispute.findById(req.params.id);
     if (!dispute) return res.status(404).json({ message: 'Not found' });
     if (dispute.status !== 'open') return res.status(400).json({ message: 'Dispute already resolved' });
-    const fileUrl = req.file ? '/uploads/' + req.file.filename : '';
+    const fileUrl = req.file ? await uploadToImageKit(req.file.buffer, req.file.originalname, '/safelancer/evidence') : '';
     dispute.evidence.push({
       submittedBy: req.user.id,
       description: req.body.description || req.file?.originalname || 'File evidence',
@@ -127,13 +121,16 @@ router.patch('/:id/resolve', auth, async (req, res) => {
           if (!isTestMode() && milestone.razorpayPaymentId && !milestone.razorpayPaymentId.startsWith('pay_test_')) {
             const Razorpay = require('razorpay');
             const razorpay = new Razorpay({ key_id: process.env.RAZORPAY_KEY_ID, key_secret: process.env.RAZORPAY_KEY_SECRET });
-            await razorpay.payments.refund(milestone.razorpayPaymentId, { amount: Math.round(milestone.amount * 100) });
+            // Refund full clientTotal (including 2% client fee) so client gets everything back
+            const refundAmt = milestone.clientTotal || milestone.amount;
+            await razorpay.payments.refund(milestone.razorpayPaymentId, { amount: Math.round(refundAmt * 100) });
           }
           // Mark refunded + check project completion
           await performRefund(milestone);
         } else if (resolution === 'split' && splitPercent != null) {
-          const freelancerAmount = Math.round(milestone.amount * splitPercent / 100);
-          const clientAmount = milestone.amount - freelancerAmount;
+          // Split is on the base amount; freelancer fee still deducted from their portion
+          const freelancerAmount = Math.round((milestone.freelancerPayout || milestone.amount * 0.98) * splitPercent / 100);
+          const clientAmount = milestone.clientTotal ? milestone.clientTotal - freelancerAmount : milestone.amount - freelancerAmount;
           if (!isTestMode() && milestone.razorpayPaymentId && !milestone.razorpayPaymentId.startsWith('pay_test_')) {
             const Razorpay = require('razorpay');
             const razorpay = new Razorpay({ key_id: process.env.RAZORPAY_KEY_ID, key_secret: process.env.RAZORPAY_KEY_SECRET });

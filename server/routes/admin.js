@@ -208,7 +208,8 @@ router.get('/payments', auth, isAdmin, async (req, res) => {
 
     // ── Summary totals ──────────────────────────────────────────────
     let totalFunded = 0, totalReleased = 0, totalRefunded = 0,
-        totalHeld = 0, totalAdvanceHeld = 0, totalPayouts = 0;
+        totalHeld = 0, totalAdvanceHeld = 0, totalPayouts = 0,
+        totalClientFees = 0, totalFreelancerFees = 0, totalPlatformEarnings = 0;
 
     for (const m of milestones) {
       totalFunded += m.amount;
@@ -216,7 +217,11 @@ router.get('/payments', auth, isAdmin, async (req, res) => {
       if (m.status === 'refunded')  totalRefunded += m.amount;
       if (HELD_STATUSES.includes(m.status)) totalHeld += m.amount;
       if (m.isAdvance && HELD_STATUSES.includes(m.status)) totalAdvanceHeld += m.amount;
+      // Platform fees: client fee collected on all funded milestones; freelancer fee on released milestones
+      if (m.clientFee) totalClientFees += m.clientFee;
+      if (m.status === 'released' && m.freelancerFee) totalFreelancerFees += m.freelancerFee;
     }
+    totalPlatformEarnings = totalClientFees + totalFreelancerFees;
     for (const t of transactions) totalPayouts += t.amount;
 
     // ── Advances breakdown ─────────────────────────────────────────
@@ -280,7 +285,7 @@ router.get('/payments', auth, isAdmin, async (req, res) => {
     }
 
     res.json({
-      summary: { totalFunded, totalReleased, totalRefunded, totalHeld, totalAdvanceHeld, totalPayouts },
+      summary: { totalFunded, totalReleased, totalRefunded, totalHeld, totalAdvanceHeld, totalPayouts, totalClientFees, totalFreelancerFees, totalPlatformEarnings },
       advances,
       contracts: Object.values(contractMap).sort((a, b) =>
         new Date(b.contract?.createdAt || 0) - new Date(a.contract?.createdAt || 0)),

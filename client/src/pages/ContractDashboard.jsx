@@ -80,18 +80,21 @@ export default function ContractDashboard() {
     setActionLoading(milestone._id + 'fund')
     try {
       const { data } = await api.post(`/api/milestones/${milestone._id}/fund`)
-      if (!data.razorpayKeyId || data.razorpayKeyId.includes('placeholder') || data.razorpayOrderId?.startsWith('order_test_')) {
-        toast.success('Funded! (test mode)')
+      // No valid Razorpay key configured — mock bypass only for development without credentials
+      if (!data.razorpayKeyId || data.razorpayOrderId?.startsWith('order_test_')) {
+        toast.success(`Funded! ₹${milestone.amount.toLocaleString()} + ₹${data.clientFee?.toLocaleString() ?? Math.round(milestone.amount * 0.02)} platform fee (no-key mode)`)
         await load()
         setActionLoading(null)
         return
       }
+      const clientTotal = data.clientTotal || Math.round(milestone.amount * 1.02)
+      const isTestKey = data.razorpayKeyId?.startsWith('rzp_test_')
       const options = {
         key: data.razorpayKeyId,
-        amount: Math.round(milestone.amount * 100),
+        amount: Math.round(clientTotal * 100),
         currency: 'INR',
         name: 'SafeLancer Escrow',
-        description: milestone.title,
+        description: `${milestone.title} · ₹${milestone.amount.toLocaleString()} + ₹${data.clientFee?.toLocaleString()} fee`,
         order_id: data.razorpayOrderId,
         handler: async (response) => {
           try {
@@ -100,17 +103,25 @@ export default function ContractDashboard() {
               razorpay_payment_id: response.razorpay_payment_id,
               razorpay_signature: response.razorpay_signature,
             })
-            toast.success('Payment successful! Milestone funded.')
+            toast.success('Payment verified! Milestone funded.')
             await load()
-          } catch { toast.error('Payment verification failed.') }
+          } catch { toast.error('Payment verification failed. Contact support if amount was deducted.') }
         },
         prefill: { name: user.name, email: user.email },
         theme: { color: '#09090b' },
-        modal: { ondismiss: () => { toast('Payment cancelled.'); setActionLoading(null) } }
+        notes: { milestoneId: milestone._id, platformFee: data.clientFee },
+        modal: {
+          ondismiss: () => { toast('Payment cancelled.'); setActionLoading(null) },
+          confirm_close: true,
+          escape: false,
+        }
+      }
+      if (isTestKey) {
+        options.description += ' [Test Mode — use test card: 4111 1111 1111 1111]'
       }
       const rzp = new window.Razorpay(options)
       rzp.on('payment.failed', (response) => {
-        toast.error(`Payment failed: ${response.error.description}`)
+        toast.error(`Payment failed: ${response.error?.description || 'Unknown error'}`)
         setActionLoading(null)
       })
       rzp.open()
@@ -308,10 +319,13 @@ export default function ContractDashboard() {
               <div className="text-right">
                 <div className="text-lg font-bold text-zinc-900">₹{advanceMilestone.amount?.toLocaleString()}</div>
                 {user.role === 'client' && advanceMilestone.status === 'pending_deposit' && (
-                  <button onClick={() => handleFund(advanceMilestone)} disabled={actionLoading === advanceMilestone._id + 'fund'}
-                    className="mt-1 bg-zinc-900 hover:bg-zinc-800 text-white px-3 py-1 rounded-lg text-xs font-medium disabled:opacity-50 transition-colors">
-                    {actionLoading === advanceMilestone._id + 'fund' ? '...' : 'Fund Advance'}
-                  </button>
+                  <>
+                    <p className="text-[10px] text-zinc-400 mt-0.5">+₹{Math.round(advanceMilestone.amount * 0.02).toLocaleString()} platform fee = ₹{Math.round(advanceMilestone.amount * 1.02).toLocaleString()} total</p>
+                    <button onClick={() => handleFund(advanceMilestone)} disabled={actionLoading === advanceMilestone._id + 'fund'}
+                      className="mt-1 bg-zinc-900 hover:bg-zinc-800 text-white px-3 py-1 rounded-lg text-xs font-medium disabled:opacity-50 transition-colors">
+                      {actionLoading === advanceMilestone._id + 'fund' ? '...' : 'Fund Advance'}
+                    </button>
+                  </>
                 )}
               </div>
             </div>
@@ -559,10 +573,15 @@ export default function ContractDashboard() {
               {user.role === 'client' && (
                 <div className="space-y-3">
                   {m.status === 'pending_deposit' && m._id === fundablePhaseId && (
-                    <button onClick={() => handleFund(m)} disabled={isL('fund')}
-                      className="bg-zinc-900 hover:bg-zinc-800 text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50 transition-colors">
-                      {isL('fund') ? 'Processing...' : `Fund Phase — ₹${m.amount?.toLocaleString()}`}
-                    </button>
+                    <div>
+                      <p className="text-[10px] text-zinc-400 mb-1">
+                        ₹{m.amount?.toLocaleString()} + ₹{Math.round(m.amount * 0.02).toLocaleString()} platform fee = <span className="font-semibold text-zinc-700">₹{Math.round(m.amount * 1.02).toLocaleString()} total</span>
+                      </p>
+                      <button onClick={() => handleFund(m)} disabled={isL('fund')}
+                        className="bg-zinc-900 hover:bg-zinc-800 text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50 transition-colors">
+                        {isL('fund') ? 'Processing...' : `Fund Phase — ₹${Math.round(m.amount * 1.02).toLocaleString()}`}
+                      </button>
+                    </div>
                   )}
                   {m.status === 'pending_deposit' && m._id !== fundablePhaseId && (
                     <div className="text-xs text-zinc-400 bg-zinc-50 border border-zinc-200 rounded-lg px-3 py-2">

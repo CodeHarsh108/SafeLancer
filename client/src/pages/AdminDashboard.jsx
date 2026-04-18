@@ -376,12 +376,17 @@ function PaymentsTab() {
   return (
     <div className="space-y-6">
       {/* Summary cards */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-        <SummaryCard label="Total Funded" value={`₹${summary.totalFunded.toLocaleString()}`} sub="by clients" accent />
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 mb-2">
+        <SummaryCard label="Platform Earnings" value={`₹${(summary.totalPlatformEarnings || 0).toLocaleString()}`} sub="2% client + 2% freelancer" accent />
+        <SummaryCard label="Client Fees" value={`₹${(summary.totalClientFees || 0).toLocaleString()}`} sub="collected on funding" />
+        <SummaryCard label="Freelancer Fees" value={`₹${(summary.totalFreelancerFees || 0).toLocaleString()}`} sub="deducted on release" />
+        <SummaryCard label="Payouts Sent" value={`₹${summary.totalPayouts.toLocaleString()}`} sub={`${transactions.length} transactions`} />
+      </div>
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+        <SummaryCard label="Total Funded" value={`₹${summary.totalFunded.toLocaleString()}`} sub="by clients (excl. fee)" />
         <SummaryCard label="In Escrow" value={`₹${summary.totalHeld.toLocaleString()}`} sub="held by platform" />
         <SummaryCard label="Released" value={`₹${summary.totalReleased.toLocaleString()}`} sub="to freelancers" />
         <SummaryCard label="Advance Held" value={`₹${summary.totalAdvanceHeld.toLocaleString()}`} sub={`${heldAdvances.length} contracts`} />
-        <SummaryCard label="Payouts Sent" value={`₹${summary.totalPayouts.toLocaleString()}`} sub={`${transactions.length} transactions`} />
         <SummaryCard label="Refunded" value={`₹${summary.totalRefunded.toLocaleString()}`} sub="to clients" />
       </div>
 
@@ -409,6 +414,7 @@ function PaymentsTab() {
             <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-4">Fund Flow</p>
             {[
               { label: 'Client Deposits (Total Funded)', amount: summary.totalFunded, color: 'bg-zinc-900' },
+              { label: 'Platform Commission Earned', amount: summary.totalPlatformEarnings || 0, color: 'bg-violet-500' },
               { label: 'Currently in Escrow', amount: summary.totalHeld, color: 'bg-amber-400' },
               { label: 'Released to Freelancers', amount: summary.totalReleased, color: 'bg-emerald-500' },
               { label: 'Advance Held by Platform', amount: summary.totalAdvanceHeld, color: 'bg-blue-500' },

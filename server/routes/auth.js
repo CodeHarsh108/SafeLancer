@@ -6,6 +6,7 @@ const User = require('../models/User');
 const Portfolio = require('../models/Portfolio');
 const auth = require('../middleware/auth');
 const { calcCompletion } = require('../utils/profileCompletion');
+const isTestMode = require('../utils/isTestMode');
 
 const FRONTEND_URL = process.env.CLIENT_URL || 'http://localhost:5173';
 const BACKEND_URL = process.env.SERVER_URL || 'http://localhost:5001';
@@ -249,10 +250,7 @@ router.post('/pay-penalty', auth, async (req, res) => {
       return res.json({ message: 'No penalty due', isBanned: false });
     }
 
-    const isTestMode = !process.env.RAZORPAY_KEY_ID || process.env.RAZORPAY_KEY_ID.includes('placeholder');
-
-    if (isTestMode) {
-      // In test mode, instantly clear penalty and unban
+    if (isTestMode()) {
       user.penaltyDue = 0;
       user.isBanned = false;
       user.banReason = '';

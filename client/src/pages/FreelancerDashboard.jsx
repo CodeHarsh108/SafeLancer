@@ -54,9 +54,8 @@ export default function FreelancerDashboard() {
   }, [])
 
   const activeContracts = contracts.filter(c => ['active', 'pending_advance'].includes(c.status))
-  const totalEarned = contracts
-    .filter(c => c.status === 'completed')
-    .reduce((sum, c) => sum + c.amount, 0)
+  // Sum from actual transaction records (net after 2% platform fee)
+  const totalEarned = transactions.reduce((sum, tx) => sum + tx.amount, 0)
 
   if (loading) return (
     <div className="min-h-screen bg-zinc-100"><Navbar />
@@ -179,6 +178,7 @@ export default function FreelancerDashboard() {
                     {/* Amount */}
                     <div className="text-right flex-shrink-0">
                       <div className="text-sm font-bold text-emerald-700">+₹{tx.amount.toLocaleString()}</div>
+                      <div className="text-[10px] text-zinc-400">after 2% fee</div>
                       <div className={`text-[10px] font-medium capitalize ${
                         tx.status === 'completed' ? 'text-emerald-600' :
                         tx.status === 'pending' ? 'text-amber-600' : 'text-red-600'
